@@ -33,7 +33,7 @@ body {
   flex-shrink: 0;
 }
 
-.pages-panel {
+.pages-list {
   width: 300px;
   background-color: #ffffff;
   border-right: 1px solid #dee2e6;
@@ -246,4 +246,38 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+.app-container {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.resizer {
+  width: 0.15em;
+  background: #eaeaea;
+  cursor: ew-resize;
+  flex-shrink: 0;
+}
+
+.resizer:hover {
+  background: #999;
+}
+
+.sidebar,
+.pages-list,
+.editor-panel {
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.sidebar, .pages-panel {
+  min-width: 250px;
+  max-width: 50%; /* Prevent sidebar from taking too much space */
+}
+
+.editor-panel {
+  flex-grow: 1;
+  min-width: 200px; /* Ensure editor panel has a minimum width */
 }

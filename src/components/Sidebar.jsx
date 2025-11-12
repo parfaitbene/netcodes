@@ -13,6 +13,7 @@ function Sidebar({
   onDeleteSection,
   onUpdateNotebook,
   onUpdateSection,
+  style,
 }) {
   const [expandedNotebooks, setExpandedNotebooks] = useState(
     notebooks.map(n => n.id)
@@ -30,7 +31,7 @@ function Sidebar({
   };
 
   return (
-    <div className="sidebar">
+    <div className="sidebar" style={style}>
       <div className="p-3 border-bottom">
         <h5 className="mb-3">
           <i className="bi bi-journal-code me-2"></i>
@@ -70,7 +71,7 @@ function Sidebar({
             return (
               <div key={notebook.id} className="mb-2">
                 <div
-                  className={`notebook-item ${selectedNotebook?.id === notebook.id ? 'active' : ''}`}
+                  className={`notebook-item overflow-hidden overflow-hidden ${selectedNotebook?.id === notebook.id ? 'active' : ''}`}
                   onClick={() => onNotebookSelect(notebook)}
                 >
                   <span
@@ -83,7 +84,7 @@ function Sidebar({
                     <i className={`bi bi-chevron-${isExpanded ? 'down' : 'right'} me-1`}></i>
                   </span>
                   <span>{notebook.icon}</span>
-                  <span className="flex-grow-1">
+                  <span className="flex-grow-1 text-truncate">
                     {editingNotebookId === notebook.id ? (
                       <input
                         type="text"
@@ -157,7 +158,7 @@ function Sidebar({
                 {isExpanded && notebookSections.map(section => (
                   <div
                     key={section.id}
-                    className={`section-item ${selectedSection?.id === section.id ? 'active' : ''}`}
+                    className={`section-item overflow-hidden ${selectedSection?.id === section.id ? 'active' : ''}`}
                     onClick={() => onSectionSelect(section)}
                   >
                     <span
@@ -169,7 +170,7 @@ function Sidebar({
                         display: 'inline-block'
                       }}
                     ></span>
-                    <span className="flex-grow-1">
+                    <span className="flex-grow-1 text-truncate">
                       {editingSectionId === section.id ? (
                         <input
                           type="text"

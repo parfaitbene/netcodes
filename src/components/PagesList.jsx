@@ -7,9 +7,10 @@ function PagesList({
   onCreatePage,
   onDeletePage,
   onToggleFavorite,
+  style,
 }) {
   return (
-    <div className="pages-panel">
+    <div className="pages-panel" style={style}>
       <div className="p-3 border-bottom">
         <div className="d-flex justify-content-between align-items-center mb-3">
           <h6 className="mb-0">Pages</h6>
@@ -34,13 +35,13 @@ function PagesList({
           pages.map(page => (
             <div
               key={page.id}
-              className={`page-item ${selectedPage?.id === page.id ? 'active' : ''}`}
+              className={`page-item overflow-hidden ${selectedPage?.id === page.id ? 'active' : ''}`}
               onClick={() => onPageSelect(page)}
             >
               <div className="d-flex justify-content-between align-items-start">
                 <div className="flex-grow-1">
                   <div className="d-flex align-items-center gap-2">
-                    <span className="fw-medium">{page.title}</span>
+                    <span className="fw-medium overflow-hidden">{page.title}</span>
                     {page.favorite === 1 && (
                       <i className="bi bi-star-fill favorite-icon" style={{ fontSize: '0.8rem' }}></i>
                     )}

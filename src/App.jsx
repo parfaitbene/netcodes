@@ -13,6 +13,58 @@ function App() {
   const [selectedPage, setSelectedPage] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const storedWidth = localStorage.getItem('sidebarWidth');
+    return storedWidth ? parseInt(storedWidth, 10) : 250;
+  });
+  const [pagesListWidth, setPagesListWidth] = useState(() => {
+    const storedWidth = localStorage.getItem('pagesListWidth');
+    return storedWidth ? parseInt(storedWidth, 10) : 250;
+  });
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const [isResizingPagesList, setIsResizingPagesList] = useState(false);
+
+  const startResizingSidebar = React.useCallback((e) => {
+    setIsResizingSidebar(true);
+  }, []);
+
+  const startResizingPagesList = React.useCallback((e) => {
+    setIsResizingPagesList(true);
+  }, []);
+
+  const stopResizing = React.useCallback(() => {
+    setIsResizingSidebar(false);
+    setIsResizingPagesList(false);
+  }, []);
+
+  const resizePanels = React.useCallback(
+    (e) => {
+      if (isResizingSidebar) {
+        const newWidth = e.clientX;
+        if (newWidth > 150 && newWidth < window.innerWidth - pagesListWidth - 200) {
+          setSidebarWidth(newWidth);
+          localStorage.setItem('sidebarWidth', newWidth);
+        }
+      } else if (isResizingPagesList) {
+        const newWidth = e.clientX - sidebarWidth;
+        if (newWidth > 150 && newWidth < window.innerWidth - sidebarWidth - 200) {
+          setPagesListWidth(newWidth);
+          localStorage.setItem('pagesListWidth', newWidth);
+        }
+      }
+    },
+    [isResizingSidebar, isResizingPagesList, sidebarWidth, pagesListWidth]
+  );
+
+  useEffect(() => {
+    window.addEventListener('mousemove', resizePanels);
+    window.addEventListener('mouseup', stopResizing);
+    return () => {
+      window.removeEventListener('mousemove', resizePanels);
+      window.removeEventListener('mouseup', stopResizing);
+    };
+  }, [resizePanels, stopResizing]);
+
   // Load initial data
   useEffect(() => {
     // Check if Electron API is available
@@ -332,7 +384,9 @@ function App() {
         onDeleteSection={handleDeleteSection}
         onUpdateNotebook ={handleUpdateNotebook}
         onUpdateSection={handleUpdateSection}
+        style={{ width: sidebarWidth }}
       />
+      <div className="resizer" onMouseDown={startResizingSidebar}></div>
       <PagesList
         pages={pages.filter(p => selectedSection ? p.section_id === selectedSection.id : false)}
         selectedPage={selectedPage}
@@ -340,7 +394,9 @@ function App() {
         onCreatePage={handleCreatePage}
         onDeletePage={handleDeletePage}
         onToggleFavorite={handleToggleFavorite}
+        style={{ width: pagesListWidth }}
       />
+      <div className="resizer" onMouseDown={startResizingPagesList}></div>
       <EditorPanel
         page={selectedPage}
         blocks={blocks}
@@ -348,6 +404,7 @@ function App() {
         onUpdateBlock={handleUpdateBlock}
         onDeleteBlock={handleDeleteBlock}
         onUpdatePageTitle={handleUpdatePageTitle}
+        style={{ flexGrow: 1 }}
       />
     </div>
   );
