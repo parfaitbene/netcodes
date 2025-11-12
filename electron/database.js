@@ -1,0 +1,239 @@
+import Database from 'better-sqlite3';
+import { app } from 'electron';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+let db = null;
+
+export function initDatabase() {
+  const userDataPath = app.getPath('userData');
+  const dbPath = path.join(userDataPath, 'netcodes.sqlite');
+
+  console.log('Database path:', dbPath);
+
+  db = new Database(dbPath);
+  db.pragma('journal_mode = WAL');
+
+  // Read and execute schema
+  const schemaPath = path.join(__dirname, 'schema.sql');
+  const schema = fs.readFileSync(schemaPath, 'utf-8');
+  db.exec(schema);
+
+  return db;
+}
+
+export function getDatabase() {
+  if (!db) {
+    throw new Error('Database not initialized');
+  }
+  return db;
+}
+
+// Notebook operations
+export const notebookOps = {
+  getAll: () => {
+    const stmt = db.prepare('SELECT * FROM notebooks ORDER BY position');
+    return stmt.all();
+  },
+
+  getById: (id) => {
+    const stmt = db.prepare('SELECT * FROM notebooks WHERE id = ?');
+    return stmt.get(id);
+  },
+
+  create: (name, icon = '📓') => {
+    const maxPos = db.prepare('SELECT MAX(position) as max FROM notebooks').get();
+    const position = (maxPos.max || 0) + 1;
+    const stmt = db.prepare('INSERT INTO notebooks (name, icon, position) VALUES (?, ?, ?)');
+    const result = stmt.run(name, icon, position);
+    return result.lastInsertRowid;
+  },
+
+  update: (id, name, icon) => {
+    const stmt = db.prepare('UPDATE notebooks SET name = ?, icon = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    return stmt.run(name, icon, id);
+  },
+
+  delete: (id) => {
+    const stmt = db.prepare('DELETE FROM notebooks WHERE id = ?');
+    return stmt.run(id);
+  },
+
+  reorder: (id, newPosition) => {
+    const stmt = db.prepare('UPDATE notebooks SET position = ? WHERE id = ?');
+    return stmt.run(newPosition, id);
+  }
+};
+
+// Section operations
+export const sectionOps = {
+  getAll: () => {
+    const stmt = db.prepare('SELECT * FROM sections ORDER BY notebook_id, position');
+    return stmt.all();
+  },
+
+  getByNotebook: (notebookId) => {
+    const stmt = db.prepare('SELECT * FROM sections WHERE notebook_id = ? ORDER BY position');
+    return stmt.all(notebookId);
+  },
+
+  getById: (id) => {
+    const stmt = db.prepare('SELECT * FROM sections WHERE id = ?');
+    return stmt.get(id);
+  },
+
+  create: (notebookId, title, color = '#007bff') => {
+    const maxPos = db.prepare('SELECT MAX(position) as max FROM sections WHERE notebook_id = ?').get(notebookId);
+    const position = (maxPos.max || 0) + 1;
+    const stmt = db.prepare('INSERT INTO sections (notebook_id, title, color, position) VALUES (?, ?, ?, ?)');
+    const result = stmt.run(notebookId, title, color, position);
+    return result.lastInsertRowid;
+  },
+
+  update: (id, title, color) => {
+    const stmt = db.prepare('UPDATE sections SET title = ?, color = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    return stmt.run(title, color, id);
+  },
+
+  delete: (id) => {
+    const stmt = db.prepare('DELETE FROM sections WHERE id = ?');
+    return stmt.run(id);
+  },
+
+  reorder: (id, newPosition) => {
+    const stmt = db.prepare('UPDATE sections SET position = ? WHERE id = ?');
+    return stmt.run(newPosition, id);
+  }
+};
+
+// Page operations
+export const pageOps = {
+  getAll: () => {
+    const stmt = db.prepare('SELECT * FROM pages ORDER BY section_id, position');
+    return stmt.all();
+  },
+
+  getBySection: (sectionId) => {
+    const stmt = db.prepare('SELECT * FROM pages WHERE section_id = ? ORDER BY position');
+    return stmt.all(sectionId);
+  },
+
+  getById: (id) => {
+    const stmt = db.prepare('SELECT * FROM pages WHERE id = ?');
+    return stmt.get(id);
+  },
+
+  getFavorites: () => {
+    const stmt = db.prepare('SELECT * FROM pages WHERE favorite = 1 ORDER BY updated_at DESC');
+    return stmt.all();
+  },
+
+  create: (sectionId, title) => {
+    const maxPos = db.prepare('SELECT MAX(position) as max FROM pages WHERE section_id = ?').get(sectionId);
+    const position = (maxPos.max || 0) + 1;
+    const stmt = db.prepare('INSERT INTO pages (section_id, title, position) VALUES (?, ?, ?)');
+    const result = stmt.run(sectionId, title, position);
+    return result.lastInsertRowid;
+  },
+
+  update: (id, title) => {
+    const stmt = db.prepare('UPDATE pages SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    return stmt.run(title, id);
+  },
+
+  toggleFavorite: (id) => {
+    const stmt = db.prepare('UPDATE pages SET favorite = NOT favorite, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    return stmt.run(id);
+  },
+
+  delete: (id) => {
+    const stmt = db.prepare('DELETE FROM pages WHERE id = ?');
+    return stmt.run(id);
+  },
+
+  reorder: (id, newPosition) => {
+    const stmt = db.prepare('UPDATE pages SET position = ? WHERE id = ?');
+    return stmt.run(newPosition, id);
+  }
+};
+
+// Block operations
+export const blockOps = {
+  getByPage: (pageId) => {
+    const stmt = db.prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY position');
+    return stmt.all(pageId);
+  },
+
+  getById: (id) => {
+    const stmt = db.prepare('SELECT * FROM blocks WHERE id = ?');
+    return stmt.get(id);
+  },
+
+  create: (pageId, type, content, language = null, filename = null) => {
+    const maxPos = db.prepare('SELECT MAX(position) as max FROM blocks WHERE page_id = ?').get(pageId);
+    const position = (maxPos.max || 0) + 1;
+    const stmt = db.prepare('INSERT INTO blocks (page_id, type, content, language, filename, position) VALUES (?, ?, ?, ?, ?, ?)');
+    const result = stmt.run(pageId, type, content, language, filename, position);
+    return result.lastInsertRowid;
+  },
+
+  update: (id, content, language = null) => {
+    const stmt = db.prepare('UPDATE blocks SET content = ?, language = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    return stmt.run(content, language, id);
+  },
+
+  delete: (id) => {
+    const stmt = db.prepare('DELETE FROM blocks WHERE id = ?');
+    return stmt.run(id);
+  },
+
+  reorder: (id, newPosition) => {
+    const stmt = db.prepare('UPDATE blocks SET position = ? WHERE id = ?');
+    return stmt.run(newPosition, id);
+  }
+};
+
+// Tag operations
+export const tagOps = {
+  getAll: () => {
+    const stmt = db.prepare('SELECT * FROM tags ORDER BY name');
+    return stmt.all();
+  },
+
+  getByPage: (pageId) => {
+    const stmt = db.prepare(`
+      SELECT t.* FROM tags t
+      INNER JOIN page_tags pt ON t.id = pt.tag_id
+      WHERE pt.page_id = ?
+      ORDER BY t.name
+    `);
+    return stmt.all(pageId);
+  },
+
+  create: (name, color = '#6c757d') => {
+    const stmt = db.prepare('INSERT INTO tags (name, color) VALUES (?, ?)');
+    const result = stmt.run(name, color);
+    return result.lastInsertRowid;
+  },
+
+  addToPage: (pageId, tagId) => {
+    const stmt = db.prepare('INSERT OR IGNORE INTO page_tags (page_id, tag_id) VALUES (?, ?)');
+    return stmt.run(pageId, tagId);
+  },
+
+  removeFromPage: (pageId, tagId) => {
+    const stmt = db.prepare('DELETE FROM page_tags WHERE page_id = ? AND tag_id = ?');
+    return stmt.run(pageId, tagId);
+  }
+};
+
+export function closeDatabase() {
+  if (db) {
+    db.close();
+    db = null;
+  }
+}
