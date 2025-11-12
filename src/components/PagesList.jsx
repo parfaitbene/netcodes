@@ -42,9 +42,6 @@ function PagesList({
                 <div className="flex-grow-1">
                   <div className="d-flex align-items-center gap-2">
                     <span className="fw-medium overflow-hidden">{page.title}</span>
-                    {page.favorite === 1 && (
-                      <i className="bi bi-star-fill favorite-icon" style={{ fontSize: '0.8rem' }}></i>
-                    )}
                   </div>
                   <small className="text-muted d-block mt-1">
                     {new Date(page.updated_at).toLocaleDateString()}

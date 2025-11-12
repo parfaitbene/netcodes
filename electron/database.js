@@ -113,12 +113,12 @@ export const sectionOps = {
 // Page operations
 export const pageOps = {
   getAll: () => {
-    const stmt = db.prepare('SELECT * FROM pages ORDER BY section_id, position');
+    const stmt = db.prepare('SELECT * FROM pages ORDER BY section_id, favorite, position');
     return stmt.all();
   },
 
   getBySection: (sectionId) => {
-    const stmt = db.prepare('SELECT * FROM pages WHERE section_id = ? ORDER BY position');
+    const stmt = db.prepare('SELECT * FROM pages WHERE section_id = ? ORDER BY favorite, position');
     return stmt.all(sectionId);
   },
 
@@ -192,7 +192,7 @@ export const blockOps = {
   },
 
   reorder: (id, newPosition) => {
-    const stmt = db.prepare('UPDATE blocks SET position = ? WHERE id = ?');
+    const stmt = db.prepare('UPDATE blocks SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
     return stmt.run(newPosition, id);
   }
 };

@@ -72,7 +72,7 @@ function Sidebar({
               <div key={notebook.id} className="mb-2">
                 <div
                   className={`notebook-item overflow-hidden overflow-hidden ${selectedNotebook?.id === notebook.id ? 'active' : ''}`}
-                  onClick={() => onNotebookSelect(notebook)}
+                  onClick={() => onNotebookSelect(notebook, true)}
                 >
                   <span
                     onClick={(e) => {

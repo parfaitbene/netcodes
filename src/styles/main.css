@@ -48,7 +48,6 @@ body {
 }
 
 .notebook-item {
-  cursor: pointer;
   padding: 10px 15px;
   border-radius: 6px;
   margin: 4px 8px;
@@ -120,6 +119,7 @@ body {
   margin-bottom: 10px;
   padding-bottom: 8px;
   border-bottom: 1px solid #e0e0e0;
+  cursor: grab;
 }
 
 .block-actions {

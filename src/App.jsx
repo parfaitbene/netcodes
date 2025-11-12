@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import Sidebar from './components/Sidebar';
 import PagesList from './components/PagesList';
 import EditorPanel from './components/EditorPanel';
 
 function App() {
+  // State for application data
   const [notebooks, setNotebooks] = useState([]);
   const [sections, setSections] = useState([]);
   const [pages, setPages] = useState([]);
@@ -13,6 +16,7 @@ function App() {
   const [selectedPage, setSelectedPage] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // State for panel resizing
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const storedWidth = localStorage.getItem('sidebarWidth');
     return storedWidth ? parseInt(storedWidth, 10) : 250;
@@ -23,39 +27,48 @@ function App() {
   });
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [isResizingPagesList, setIsResizingPagesList] = useState(false);
+  const [initialSidebarWidth, setInitialSidebarWidth] = useState(0);
+  const [initialPagesListWidth, setInitialPagesListWidth] = useState(0);
+  const [initialMouseX, setInitialMouseX] = useState(0);
 
-  const startResizingSidebar = React.useCallback((e) => {
+  // Callback functions for resizing
+  const startResizingSidebar = useCallback((e) => {
     setIsResizingSidebar(true);
-  }, []);
+    setInitialSidebarWidth(sidebarWidth);
+    setInitialMouseX(e.clientX);
+  }, [sidebarWidth]);
 
-  const startResizingPagesList = React.useCallback((e) => {
+  const startResizingPagesList = useCallback((e) => {
     setIsResizingPagesList(true);
-  }, []);
+    setInitialPagesListWidth(pagesListWidth);
+    setInitialMouseX(e.clientX);
+  }, [pagesListWidth]);
 
-  const stopResizing = React.useCallback(() => {
+  const stopResizing = useCallback(() => {
     setIsResizingSidebar(false);
     setIsResizingPagesList(false);
   }, []);
 
-  const resizePanels = React.useCallback(
+  const resizePanels = useCallback(
     (e) => {
       if (isResizingSidebar) {
-        const newWidth = e.clientX;
+        const newWidth = initialSidebarWidth + (e.clientX - initialMouseX);
         if (newWidth > 150 && newWidth < window.innerWidth - pagesListWidth - 200) {
           setSidebarWidth(newWidth);
           localStorage.setItem('sidebarWidth', newWidth);
         }
       } else if (isResizingPagesList) {
-        const newWidth = e.clientX - sidebarWidth;
+        const newWidth = initialPagesListWidth + (e.clientX - initialMouseX);
         if (newWidth > 150 && newWidth < window.innerWidth - sidebarWidth - 200) {
           setPagesListWidth(newWidth);
           localStorage.setItem('pagesListWidth', newWidth);
         }
       }
     },
-    [isResizingSidebar, isResizingPagesList, sidebarWidth, pagesListWidth]
+    [isResizingSidebar, isResizingPagesList, initialSidebarWidth, initialPagesListWidth, initialMouseX, sidebarWidth, pagesListWidth]
   );
 
+  // Effects for resizing event listeners
   useEffect(() => {
     window.addEventListener('mousemove', resizePanels);
     window.addEventListener('mouseup', stopResizing);
@@ -65,17 +78,7 @@ function App() {
     };
   }, [resizePanels, stopResizing]);
 
-  // Load initial data
-  useEffect(() => {
-    // Check if Electron API is available
-    if (!window.api) {
-      console.error('Electron API not available. Make sure preload script is loaded.');
-      setLoading(false);
-      return;
-    }
-    loadData();
-  }, []);
-
+  // Function to load initial data
   const loadData = async () => {
     try {
       if (!window.api) {
@@ -110,6 +113,17 @@ function App() {
     }
   };
 
+  // Effect to load initial data on component mount
+  useEffect(() => {
+    if (!window.api) {
+      console.error('Electron API not available. Make sure preload script is loaded.');
+      setLoading(false);
+      return;
+    }
+    loadData();
+  }, []);
+
+  // Handlers for application logic
   const handleNotebookSelect = async (notebook, handleChildSelectection = false) => {
     setSelectedNotebook(notebook);
     const notebookSections = sections.filter(s => s.notebook_id === notebook.id);
@@ -126,7 +140,6 @@ function App() {
     setSelectedSection(section);
     const notebook = await window.api.notebooks.getById(section.notebook_id);
       setSelectedNotebook(notebook);
-    // await handleNotebookSelect(notebook, );
 
     const sectionPages = pages.filter(p => p.section_id === section.id);
     if (handleChildSelectection && sectionPages.length > 0) {
@@ -141,7 +154,6 @@ function App() {
     setSelectedPage(page);
     const section = await window.api.sections.getById(page.section_id);
       setSelectedSection(section);
-    // await handleSectionSelect(section);
 
     try {
       const blocksData = await window.api.blocks.getByPage(page.id);
@@ -256,11 +268,8 @@ function App() {
         const newPage = await window.api.pages.getById(id);
         await loadData();
         const section = await window.api.sections.getById(newPage.section_id);
-        // const notebook = await window.api.notebooks.getById(section.notebook_id);
           await handleSectionSelect(section, true);
         await handlePageSelect(newPage, true);
-        // setSelectedSection(section);
-        // setSelectedNotebook(notebook);
         setBlocks([]);
       } catch (error) {
         console.error('Error creating page:', error);
@@ -273,11 +282,9 @@ function App() {
       try {
           const page = await window.api.pages.getById(pageId);
         const section = await window.api.sections.getById(page.section_id);
-        // const notebook = await window.api.notebooks.getById(page.notebook_id);
         await window.api.pages.delete(pageId);
         await loadData();
         await handleSectionSelect(section, true);
-        // setSelectedNotebook(notebook);
         if (selectedPage?.id === pageId) {
           setSelectedPage(null);
           setBlocks([]);
@@ -291,8 +298,7 @@ function App() {
   const handleUpdatePageTitle = async (pageId, newTitle) => {
     try {
       await window.api.pages.update(pageId, newTitle);
-      await loadData(); // Reload all data to reflect the change
-      // Update selectedPage if the updated page is currently selected
+      await loadData();
       setSelectedPage(prevPage =>
         prevPage && prevPage.id === pageId ? { ...prevPage, title: newTitle } : prevPage
       );
@@ -348,6 +354,17 @@ function App() {
     }
   };
 
+    const handleReorderBlock = async (blockId, newPosition) => {
+    try {
+      await window.api.blocks.reorder(blockId, newPosition);
+      const blocksData = await window.api.blocks.getByPage(selectedPage.id);
+      setBlocks(blocksData);
+    } catch (error) {
+      console.error('Error reordering block:', error);
+    }
+  };
+
+  // Conditional rendering based on loading state or Electron API availability
   if (loading) {
     return (
       <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh' }}>
@@ -370,43 +387,46 @@ function App() {
   }
 
   return (
-    <div className="app-container">
-      <Sidebar
-        notebooks={notebooks}
-        sections={sections}
-        selectedNotebook={selectedNotebook}
-        selectedSection={selectedSection}
-        onNotebookSelect={handleNotebookSelect}
-        onSectionSelect={handleSectionSelect}
-        onCreateNotebook={handleCreateNotebook}
-        onCreateSection={handleCreateSection}
-        onDeleteNotebook={handleDeleteNotebook}
-        onDeleteSection={handleDeleteSection}
-        onUpdateNotebook ={handleUpdateNotebook}
-        onUpdateSection={handleUpdateSection}
-        style={{ width: sidebarWidth }}
-      />
-      <div className="resizer" onMouseDown={startResizingSidebar}></div>
-      <PagesList
-        pages={pages.filter(p => selectedSection ? p.section_id === selectedSection.id : false)}
-        selectedPage={selectedPage}
-        onPageSelect={handlePageSelect}
-        onCreatePage={handleCreatePage}
-        onDeletePage={handleDeletePage}
-        onToggleFavorite={handleToggleFavorite}
-        style={{ width: pagesListWidth }}
-      />
-      <div className="resizer" onMouseDown={startResizingPagesList}></div>
-      <EditorPanel
-        page={selectedPage}
-        blocks={blocks}
-        onCreateBlock={handleCreateBlock}
-        onUpdateBlock={handleUpdateBlock}
-        onDeleteBlock={handleDeleteBlock}
-        onUpdatePageTitle={handleUpdatePageTitle}
-        style={{ flexGrow: 1 }}
-      />
-    </div>
+    <DndProvider backend={HTML5Backend}>
+      <div className="app-container">
+        <Sidebar
+          notebooks={notebooks}
+          sections={sections}
+          selectedNotebook={selectedNotebook}
+          selectedSection={selectedSection}
+          onNotebookSelect={handleNotebookSelect}
+          onSectionSelect={handleSectionSelect}
+          onCreateNotebook={handleCreateNotebook}
+          onCreateSection={handleCreateSection}
+          onDeleteNotebook={handleDeleteNotebook}
+          onDeleteSection={handleDeleteSection}
+          onUpdateNotebook ={handleUpdateNotebook}
+          onUpdateSection={handleUpdateSection}
+          style={{ width: sidebarWidth }}
+        />
+        <div className="resizer" onMouseDown={startResizingSidebar}></div>
+        <PagesList
+          pages={pages.filter(p => selectedSection ? p.section_id === selectedSection.id : false)}
+          selectedPage={selectedPage}
+          onPageSelect={handlePageSelect}
+          onCreatePage={handleCreatePage}
+          onDeletePage={handleDeletePage}
+          onToggleFavorite={handleToggleFavorite}
+          style={{ width: pagesListWidth }}
+        />
+        <div className="resizer" onMouseDown={startResizingPagesList}></div>
+        <EditorPanel
+          page={selectedPage}
+          blocks={blocks}
+          onCreateBlock={handleCreateBlock}
+          onUpdateBlock={handleUpdateBlock}
+          onDeleteBlock={handleDeleteBlock}
+          onUpdatePageTitle={handleUpdatePageTitle}
+          onReorderBlock={handleReorderBlock}
+          style={{ flexGrow: 1 }}
+        />
+      </div>
+    </DndProvider>
   );
 }
 
