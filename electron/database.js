@@ -164,26 +164,26 @@ export const pageOps = {
 // Block operations
 export const blockOps = {
   getByPage: (pageId) => {
-    const stmt = db.prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY position');
+    const stmt = db.prepare('SELECT id, page_id, type, title, content, language, filename, filepath, position, created_at, updated_at FROM blocks WHERE page_id = ? ORDER BY position');
     return stmt.all(pageId);
   },
 
   getById: (id) => {
-    const stmt = db.prepare('SELECT * FROM blocks WHERE id = ?');
+    const stmt = db.prepare('SELECT id, page_id, type, title, content, language, filename, filepath, position, created_at, updated_at FROM blocks WHERE id = ?');
     return stmt.get(id);
   },
 
-  create: (pageId, type, content, language = null, filename = null) => {
+  create: (pageId, type, content, language = null, filename = null, title = null) => {
     const maxPos = db.prepare('SELECT MAX(position) as max FROM blocks WHERE page_id = ?').get(pageId);
     const position = (maxPos.max || 0) + 1;
-    const stmt = db.prepare('INSERT INTO blocks (page_id, type, content, language, filename, position) VALUES (?, ?, ?, ?, ?, ?)');
-    const result = stmt.run(pageId, type, content, language, filename, position);
+    const stmt = db.prepare('INSERT INTO blocks (page_id, type, content, language, filename, title, position) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const result = stmt.run(pageId, type, content, language, filename, title, position);
     return result.lastInsertRowid;
   },
 
-  update: (id, content, language = null) => {
-    const stmt = db.prepare('UPDATE blocks SET content = ?, language = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-    return stmt.run(content, language, id);
+  update: (id, content, language = null, title = null) => {
+    const stmt = db.prepare('UPDATE blocks SET content = ?, language = ?, title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    return stmt.run(content, language, title, id);
   },
 
   delete: (id) => {

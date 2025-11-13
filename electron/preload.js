@@ -43,7 +43,7 @@ contextBridge.exposeInMainWorld('api', {
     getById: (id) => ipcRenderer.invoke('blocks:getById', id),
     create: (pageId, type, content, language, filename) =>
       ipcRenderer.invoke('blocks:create', pageId, type, content, language, filename),
-    update: (id, content, language) => ipcRenderer.invoke('blocks:update', id, content, language),
+    update: (id, content, language, title) => ipcRenderer.invoke('blocks:update', id, content, language, title),
     delete: (id) => ipcRenderer.invoke('blocks:delete', id),
     reorder: (id, position) => ipcRenderer.invoke('blocks:reorder', id, position),
   },

@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS blocks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     page_id INTEGER NOT NULL,
     type TEXT NOT NULL CHECK(type IN ('text', 'code', 'attachment')),
+    title TEXT,
     content TEXT,
     language TEXT,
     filename TEXT,

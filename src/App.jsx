@@ -324,7 +324,8 @@ function App() {
     try {
       const content = type === 'text' ? '# New Text Block\n\nStart typing...' : '// Write your code here';
       const language = type === 'code' ? 'javascript' : null;
-      await window.api.blocks.create(selectedPage.id, type, content, language, null);
+      const title = null; // New blocks start with no title
+      await window.api.blocks.create(selectedPage.id, type, content, language, null, title);
       const blocksData = await window.api.blocks.getByPage(selectedPage.id);
       setBlocks(blocksData);
     } catch (error) {
@@ -332,9 +333,9 @@ function App() {
     }
   };
 
-  const handleUpdateBlock = async (blockId, content, language) => {
+  const handleUpdateBlock = async (blockId, content, language, title) => {
     try {
-      await window.api.blocks.update(blockId, content, language);
+      await window.api.blocks.update(blockId, content, language, title);
       const blocksData = await window.api.blocks.getByPage(selectedPage.id);
       setBlocks(blocksData);
     } catch (error) {

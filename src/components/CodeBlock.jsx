@@ -28,28 +28,35 @@ const LANGUAGES = [
 ];
 
 function CodeBlock({ block, onUpdate, onDelete }) {
-  const [isEditing, setIsEditing] = useState(false);
+  // const [isEditing, setIsEditing] = useState(false);
   const [language, setLanguage] = useState(block.language || 'javascript');
   const [code, setCode] = useState(block.content || '');
+  const [editedTitle, setEditedTitle] = useState(block.title || '');
   const editorRef = useRef(null);
 
   // Synchronize local state with block prop changes
   useEffect(() => {
     setCode(block.content || '');
     setLanguage(block.language || 'javascript');
-  }, [block.content, block.language, block.id]);
+    setEditedTitle(block.title || '');
+  }, [block.content, block.language, block.id, block.title]);
 
   const handleEditorDidMount = (editor) => {
     editorRef.current = editor;
   };
 
   const handleSave = () => {
-    onUpdate(block.id, code, language);
-    setIsEditing(false);
+    onUpdate(block.id, code, language, editedTitle);
+    // setIsEditing(false);
+  };
+
+  const handleTitleBlur = () => {
+    if (editedTitle !== block.title) {
+      onUpdate(block.id, code, language, editedTitle);
+    }
   };
 
   const handleCopy = async () => {
-    console.log('Attempting to copy code:', code);
     try {
       await navigator.clipboard.writeText(code);
       alert('Code copied to clipboard!');
@@ -66,15 +73,22 @@ function CodeBlock({ block, onUpdate, onDelete }) {
   return (
     <div className="block-container">
       <div className="block-header">
-        <div className="d-flex align-items-center gap-2">
-          <i className="bi bi-code-slash"></i>
-          <span className="fw-medium">Code Block</span>
+        <div className="d-flex align-items-center gap-2 flex-grow-1">
+          <i className="reorder bi bi-grip-vertical"></i>
+          <input
+            type="text"
+            className="form-control form-control-sm w-100"
+            value={editedTitle}
+            onChange={(e) => setEditedTitle(e.target.value)}
+            onBlur={handleTitleBlur}
+            placeholder="Bloc sans titre"
+          />
           <select
-            className="form-select form-select-sm"
+            className="form-select form-select-sm mx-2"
             style={{ width: 'auto' }}
             value={language}
             onChange={handleLanguageChange}
-            disabled={!isEditing}
+            // disabled={!isEditing}
           >
             {LANGUAGES.map(lang => (
               <option key={lang.value} value={lang.value}>
@@ -84,55 +98,23 @@ function CodeBlock({ block, onUpdate, onDelete }) {
           </select>
         </div>
         <div className="block-actions">
-          {!isEditing ? (
-            <>
-              <button
+            <button
                 className="btn btn-sm btn-outline-secondary"
                 onClick={handleCopy}
                 title="Copy to clipboard"
               >
                 <i className="bi bi-clipboard"></i>
-              </button>
-              <button
-                className="btn btn-sm btn-outline-primary"
-                onClick={() => setIsEditing(true)}
-                title="Edit"
-              >
-                <i className="bi bi-pencil"></i>
-              </button>
-              <button
+             </button>
+             <button
                 className="btn btn-sm btn-outline-danger"
                 onClick={() => onDelete(block.id)}
                 title="Delete"
               >
                 <i className="bi bi-trash"></i>
               </button>
-            </>
-          ) : (
-            <>
-              <button
-                className="btn btn-sm btn-success"
-                onClick={handleSave}
-                title="Save"
-              >
-                <i className="bi bi-check-lg"></i>
-              </button>
-              <button
-                className="btn btn-sm btn-secondary"
-                onClick={() => {
-                  setIsEditing(false);
-                  setCode(block.content);
-                  setLanguage(block.language || 'javascript');
-                }}
-                title="Cancel"
-              >
-                <i className="bi bi-x-lg"></i>
-              </button>
-            </>
-          )}
         </div>
       </div>
-      <div className="code-block-wrapper">
+      <div className="code-block-wrapper" onBlur={handleSave}>
         <Editor
           height="300px"
           language={language}
@@ -141,7 +123,7 @@ function CodeBlock({ block, onUpdate, onDelete }) {
           onMount={handleEditorDidMount}
           theme="vs-light"
           options={{
-            readOnly: !isEditing,
+            // readOnly: !isEditing,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
             fontSize: 14,

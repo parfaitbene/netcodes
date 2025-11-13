@@ -120,13 +120,11 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
   const moveBlock = async (id, dragIndex, hoverIndex) => {
     const draggedBlock = blocks.find(block => block.id === id);
     if (draggedBlock) {
-      const reorderedBlocks = Array.from(blocks);
+      const reorderedBlocks = Array.from(localBlocks);
       reorderedBlocks.splice(dragIndex, 1);
       reorderedBlocks.splice(hoverIndex, 0, draggedBlock);
-      const idBlock = localBlocks[dragIndex].id;
-      await onReorderBlock(idBlock, hoverIndex)
+      await onReorderBlock(draggedBlock.id, hoverIndex);
       setLocalBlocks(reorderedBlocks);
-      // onReorderBlock(reorderedBlocks);
     }
   };
 

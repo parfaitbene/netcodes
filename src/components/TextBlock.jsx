@@ -4,15 +4,23 @@ import { marked } from 'marked';
 function TextBlock({ block, onUpdate, onDelete }) {
   const [isEditing, setIsEditing] = useState(false);
   const [content, setContent] = useState(block.content || '');
+  const [editedTitle, setEditedTitle] = useState(block.title || '');
 
   // Synchronize local state with block prop changes
   useEffect(() => {
     setContent(block.content || '');
-  }, [block.content, block.id]);
+    setEditedTitle(block.title || '');
+  }, [block.content, block.id, block.title]);
 
   const handleSave = () => {
-    onUpdate(block.id, content, null);
+    onUpdate(block.id, content, null, editedTitle);
     setIsEditing(false);
+  };
+
+  const handleTitleBlur = () => {
+    if (editedTitle !== block.title) {
+      onUpdate(block.id, content, null, editedTitle);
+    }
   };
 
   const renderMarkdown = (text) => {
@@ -25,11 +33,18 @@ function TextBlock({ block, onUpdate, onDelete }) {
   };
 
   return (
-    <div className="block-container">
+    <div className="block-container" onBlur={handleSave}>
       <div className="block-header">
-        <div className="d-flex align-items-center gap-2">
-          <i className="bi bi-file-text"></i>
-          <span className="fw-medium">Text Block</span>
+        <div className="d-flex align-items-center gap-2 flex-grow-1">
+          <i className="reorder bi bi-grip-vertical"></i>
+          <input
+            type="text"
+            className="form-control form-control-sm w-100"
+            value={editedTitle}
+            onChange={(e) => setEditedTitle(e.target.value)}
+            onBlur={handleTitleBlur}
+            placeholder="Bloc sans titre"
+          />
         </div>
         <div className="block-actions">
           {!isEditing ? (
@@ -74,7 +89,12 @@ function TextBlock({ block, onUpdate, onDelete }) {
       </div>
       {isEditing ? (
         <textarea
+            id="nc-text-area-content"
           className="form-control"
+          onBlur={() => {
+              handleSave();
+              setIsEditing(false);
+          }}
           rows="10"
           value={content}
           onChange={(e) => setContent(e.target.value)}
@@ -84,6 +104,10 @@ function TextBlock({ block, onUpdate, onDelete }) {
         <div
           className="markdown-content"
           dangerouslySetInnerHTML={renderMarkdown(content)}
+          onClick={() => {
+              setIsEditing(true);
+              document.getElementById("nc-text-area-content");
+          }}
         />
       )}
     </div>

@@ -39,9 +39,9 @@ function PagesList({
               onClick={() => onPageSelect(page)}
             >
               <div className="d-flex justify-content-between align-items-start">
-                <div className="flex-grow-1">
+                <div className="flex-grow-1 overflow-hidden">
                   <div className="d-flex align-items-center gap-2">
-                    <span className="fw-medium overflow-hidden">{page.title}</span>
+                    <span className="fw-medium overflow-hidden text-truncate">{page.title}</span>
                   </div>
                   <small className="text-muted d-block mt-1">
                     {new Date(page.updated_at).toLocaleDateString()}

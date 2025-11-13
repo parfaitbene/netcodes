@@ -170,7 +170,7 @@ function Sidebar({
                         display: 'inline-block'
                       }}
                     ></span>
-                    <span className="flex-grow-1 text-truncate">
+                    <span className="flex-grow-1 text-truncate overflow-hidden">
                       {editingSectionId === section.id ? (
                         <input
                           type="text"

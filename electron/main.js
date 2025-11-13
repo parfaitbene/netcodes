@@ -93,7 +93,7 @@ ipcMain.handle('pages:reorder', (_, id, position) => pageOps.reorder(id, positio
 ipcMain.handle('blocks:getByPage', (_, pageId) => blockOps.getByPage(pageId));
 ipcMain.handle('blocks:getById', (_, id) => blockOps.getById(id));
 ipcMain.handle('blocks:create', (_, pageId, type, content, language, filename) => blockOps.create(pageId, type, content, language, filename));
-ipcMain.handle('blocks:update', (_, id, content, language) => blockOps.update(id, content, language));
+ipcMain.handle('blocks:update', (_, id, content, language, title) => blockOps.update(id, content, language, title));
 ipcMain.handle('blocks:delete', (_, id) => blockOps.delete(id));
 ipcMain.handle('blocks:reorder', (_, id, position) => blockOps.reorder(id, position));
 
