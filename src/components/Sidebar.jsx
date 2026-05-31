@@ -71,6 +71,16 @@ function Sidebar({
             onChange={(e) => onSearchChange(e.target.value)}
             onKeyUp={(e) => onSearch(e.target.value)}
           />
+          {searchQuery && (
+            <button
+              className="btn btn-outline-secondary btn-sm"
+              type="button"
+              onClick={() => { onSearchChange(''); onSearch(''); }}
+              title="Effacer la recherche"
+            >
+              <i className="bi bi-x-lg"></i>
+            </button>
+          )}
         </div>
         {searchResults.length > 0 && searchQuery && (
           <div className="search-results-overlay">

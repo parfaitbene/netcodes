@@ -249,16 +249,18 @@ export const searchOps = {
         b.title     AS block_title,
         b.content   AS block_content,
         b.language  AS block_language
-      FROM blocks b
-      JOIN pages    p ON b.page_id      = p.id
-      JOIN sections s ON p.section_id   = s.id
-      JOIN notebooks n ON s.notebook_id = n.id
-      WHERE p.title    LIKE ?
-         OR b.title    LIKE ?
-         OR b.content  LIKE ?
+      FROM pages p
+      JOIN sections  s ON p.section_id   = s.id
+      JOIN notebooks n ON s.notebook_id  = n.id
+      LEFT JOIN blocks b ON b.page_id    = p.id
+      WHERE p.title   LIKE ?
+         OR s.title   LIKE ?
+         OR n.name    LIKE ?
+         OR b.title   LIKE ?
+         OR b.content LIKE ?
       ORDER BY p.updated_at DESC
     `);
-    return stmt.all(term, term, term);
+    return stmt.all(term, term, term, term, term);
   }
 };
 
