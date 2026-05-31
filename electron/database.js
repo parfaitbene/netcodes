@@ -9,9 +9,10 @@ const __dirname = path.dirname(__filename);
 
 let db = null;
 
-export function initDatabase() {
-  const userDataPath = app.getPath('userData');
-  const dbPath = path.join(userDataPath, 'netcodes.sqlite');
+export function initDatabase(dbPath) {
+  if (!dbPath) {
+    dbPath = path.join(app.getPath('userData'), 'netcodes.sqlite');
+  }
 
   console.log('Database path:', dbPath);
 
