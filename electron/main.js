@@ -9,7 +9,8 @@ import {
   sectionOps,
   pageOps,
   blockOps,
-  tagOps
+  tagOps,
+  searchOps
 } from './database.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -103,6 +104,8 @@ ipcMain.handle('tags:getByPage', (_, pageId) => tagOps.getByPage(pageId));
 ipcMain.handle('tags:create', (_, name, color) => tagOps.create(name, color));
 ipcMain.handle('tags:addToPage', (_, pageId, tagId) => tagOps.addToPage(pageId, tagId));
 
+// IPC Handlers for Search
+ipcMain.handle('search:query', (_, query) => searchOps.search(query));
 
 ipcMain.handle('dialog:prompt', async (event, message, defaultValue = '') => {
   const result = await prompt({

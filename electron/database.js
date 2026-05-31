@@ -231,6 +231,36 @@ export const tagOps = {
   }
 };
 
+// Search operations
+export const searchOps = {
+  search: (query) => {
+    const term = `%${query}%`;
+    const stmt = db.prepare(`
+      SELECT DISTINCT
+        p.id        AS page_id,
+        p.title     AS page_title,
+        s.id        AS section_id,
+        s.title     AS section_title,
+        n.id        AS notebook_id,
+        n.name      AS notebook_name,
+        b.id        AS block_id,
+        b.type      AS block_type,
+        b.title     AS block_title,
+        b.content   AS block_content,
+        b.language  AS block_language
+      FROM blocks b
+      JOIN pages    p ON b.page_id      = p.id
+      JOIN sections s ON p.section_id   = s.id
+      JOIN notebooks n ON s.notebook_id = n.id
+      WHERE p.title    LIKE ?
+         OR b.title    LIKE ?
+         OR b.content  LIKE ?
+      ORDER BY p.updated_at DESC
+    `);
+    return stmt.all(term, term, term);
+  }
+};
+
 export function closeDatabase() {
   if (db) {
     db.close();

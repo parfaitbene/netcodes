@@ -57,6 +57,11 @@ contextBridge.exposeInMainWorld('api', {
     removeFromPage: (pageId, tagId) => ipcRenderer.invoke('tags:removeFromPage', pageId, tagId),
   },
 
+  // Search operations
+  search: {
+    query: (query) => ipcRenderer.invoke('search:query', query),
+  },
+
   // Dialog operations
   dialog: {
     prompt: (message, defaultValue) => ipcRenderer.invoke('dialog:prompt', message, defaultValue),

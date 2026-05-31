@@ -15,6 +15,43 @@ function App() {
   const [selectedSection, setSelectedSection] = useState(null);
   const [selectedPage, setSelectedPage] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+
+  // Search handler
+  const handleSearch = async (query) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    try {
+      const results = await window.api.search.query(query);
+      const groupedResults = {};
+      results.forEach(result => {
+        if (!groupedResults[result.page_id]) {
+          groupedResults[result.page_id] = {
+            page_id: result.page_id,
+            page_title: result.page_title,
+            section_id: result.section_id,
+            section_title: result.section_title,
+            notebook_id: result.notebook_id,
+            notebook_name: result.notebook_name,
+            blocks: []
+          };
+        }
+        groupedResults[result.page_id].blocks.push({
+          block_id: result.block_id,
+          block_type: result.block_type,
+          block_title: result.block_title,
+          block_content: result.block_content,
+          block_language: result.block_language
+        });
+      });
+      setSearchResults(Object.values(groupedResults));
+    } catch (error) {
+      console.error('Error searching:', error);
+    }
+  };
 
   // State for panel resizing
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -393,6 +430,7 @@ function App() {
         <Sidebar
           notebooks={notebooks}
           sections={sections}
+          pages={pages}
           selectedNotebook={selectedNotebook}
           selectedSection={selectedSection}
           onNotebookSelect={handleNotebookSelect}
@@ -403,6 +441,11 @@ function App() {
           onDeleteSection={handleDeleteSection}
           onUpdateNotebook ={handleUpdateNotebook}
           onUpdateSection={handleUpdateSection}
+          searchQuery={searchQuery}
+          searchResults={searchResults}
+          onSearchChange={setSearchQuery}
+          onSearch={handleSearch}
+          onPageSelect={handlePageSelect}
           style={{ width: sidebarWidth }}
         />
         <div className="resizer" onMouseDown={startResizingSidebar}></div>

@@ -13,6 +13,12 @@ function Sidebar({
   onDeleteSection,
   onUpdateNotebook,
   onUpdateSection,
+  searchQuery,
+  searchResults,
+  onSearchChange,
+  onSearch,
+  onPageSelect,
+  pages = [],
   style,
 }) {
   const [expandedNotebooks, setExpandedNotebooks] = useState(
@@ -32,7 +38,7 @@ function Sidebar({
 
   return (
     <div className="sidebar" style={style}>
-      <div className="p-3 border-bottom">
+      <div className="p-3 border-bottom" style={{ position: 'relative' }}>
         <h5 className="mb-3">
           <i className="bi bi-journal-code me-2"></i>
           NetCodes
@@ -55,6 +61,42 @@ function Sidebar({
             Section
           </button>
         </div>
+        <div className="input-group input-group-sm mt-3">
+          <span className="input-group-text"><i className="bi bi-search"></i></span>
+          <input
+            type="text"
+            className="form-control form-control-sm"
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            onKeyUp={(e) => onSearch(e.target.value)}
+          />
+        </div>
+        {searchResults.length > 0 && searchQuery && (
+          <div className="search-results-overlay">
+            {searchResults.map(result => {
+              const resultPage = pages.find(p => p.id === result.page_id);
+              return resultPage ? (
+                <div
+                  key={result.page_id}
+                  className="search-result-item"
+                  onClick={() => onPageSelect(resultPage)}
+                >
+                  <div className="search-result-header">
+                    <span className="fw-bold text-truncate">{result.page_title}</span>
+                    <span className="text-muted small">{result.section_title}</span>
+                  </div>
+                  {result.blocks.slice(0, 2).map((block, idx) => (
+                    <div key={idx} className="search-result-block-snippet">
+                      {block.block_title && <span className="fw-bold text-truncate">{block.block_title}</span>}
+                      <span className="text-muted text-truncate d-block">{block.block_content?.substring(0, 80)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null;
+            })}
+          </div>
+        )}
       </div>
 
       <div className="p-2">
