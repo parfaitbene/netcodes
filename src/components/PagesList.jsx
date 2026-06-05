@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 function PagesList({
   pages,
@@ -7,8 +7,11 @@ function PagesList({
   onCreatePage,
   onDeletePage,
   onToggleFavorite,
+  onReorderPage,
   style,
 }) {
+  const [hoveredPageId, setHoveredPageId] = useState(null);
+
   return (
     <div className="pages-panel" style={style}>
       <div className="p-3 border-bottom">
@@ -32,20 +35,61 @@ function PagesList({
             <p className="small">Click + to create one.</p>
           </div>
         ) : (
-          pages.map(page => (
+          pages.map((page, index) => (
             <div
               key={page.id}
               className={`page-item overflow-hidden ${selectedPage?.id === page.id ? 'active' : ''}`}
+              onMouseEnter={() => setHoveredPageId(page.id)}
+              onMouseLeave={() => setHoveredPageId(null)}
               onClick={() => onPageSelect(page)}
             >
               <div className="d-flex justify-content-between align-items-start">
-                <div className="flex-grow-1 overflow-hidden">
-                  <div className="d-flex align-items-center gap-2">
-                    <span className="fw-medium overflow-hidden text-truncate">{page.title}</span>
+                <div className="d-flex align-items-start gap-2 flex-grow-1 overflow-hidden">
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px',
+                    opacity: hoveredPageId === page.id ? 1 : 0,
+                    transition: 'opacity 0.2s',
+                    minWidth: '30px'
+                  }}>
+                    <button
+                      className="btn btn-sm btn-link text-secondary p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (index > 0) {
+                          onReorderPage(page.id, index - 1);
+                        }
+                      }}
+                      disabled={index === 0}
+                      title="Move up"
+                      style={{ fontSize: '0.75rem', lineHeight: '1' }}
+                    >
+                      <i className="bi bi-arrow-up"></i>
+                    </button>
+                    <button
+                      className="btn btn-sm btn-link text-secondary p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (index < pages.length - 1) {
+                          onReorderPage(page.id, index + 1);
+                        }
+                      }}
+                      disabled={index === pages.length - 1}
+                      title="Move down"
+                      style={{ fontSize: '0.75rem', lineHeight: '1' }}
+                    >
+                      <i className="bi bi-arrow-down"></i>
+                    </button>
                   </div>
-                  <small className="text-muted d-block mt-1">
-                    {new Date(page.updated_at).toLocaleDateString()}
-                  </small>
+                  <div className="overflow-hidden">
+                    <div className="d-flex align-items-center gap-2">
+                      <span className="fw-medium overflow-hidden text-truncate">{page.title}</span>
+                    </div>
+                    <small className="text-muted d-block mt-1">
+                      {new Date(page.updated_at).toLocaleDateString()}
+                    </small>
+                  </div>
                 </div>
                 <div className="d-flex gap-1">
                   <button

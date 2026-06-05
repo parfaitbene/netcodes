@@ -14,8 +14,6 @@ export function initDatabase(dbPath) {
     dbPath = path.join(app.getPath('userData'), 'netcodes.sqlite');
   }
 
-  console.log('Database path:', dbPath);
-
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
 

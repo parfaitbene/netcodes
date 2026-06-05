@@ -261,6 +261,84 @@ function App() {
     }
   };
 
+  const handleReorderNotebook = async (notebookId, newPosition) => {
+    try {
+      const allNotebooks = [...notebooks].sort((a, b) => a.position - b.position);
+      const currentIndex = allNotebooks.findIndex(n => n.id === notebookId);
+      
+      if (currentIndex !== newPosition && newPosition >= 0 && newPosition < allNotebooks.length) {
+        const reorderedList = [...allNotebooks];
+        const [movedItem] = reorderedList.splice(currentIndex, 1);
+        reorderedList.splice(newPosition, 0, movedItem);
+        
+        // Reorder all notebooks with new sequential positions
+        for (let i = 0; i < reorderedList.length; i++) {
+          await window.api.notebooks.reorder(reorderedList[i].id, i + 1);
+        }
+      }
+      
+      const updatedNotebooks = await window.api.notebooks.getAll();
+      setNotebooks(updatedNotebooks);
+    } catch (error) {
+      console.error('Error reordering notebook:', error);
+    }
+  };
+
+  const handleReorderSection = async (sectionId, newPosition) => {
+    try {
+      const currentSection = sections.find(s => s.id === sectionId);
+      if (!currentSection) return;
+      
+      const notebookSections = sections
+        .filter(s => s.notebook_id === currentSection.notebook_id)
+        .sort((a, b) => a.position - b.position);
+      
+      const currentIndex = notebookSections.findIndex(s => s.id === sectionId);
+      
+      if (currentIndex !== newPosition && newPosition >= 0 && newPosition < notebookSections.length) {
+        const reorderedList = [...notebookSections];
+        const [movedItem] = reorderedList.splice(currentIndex, 1);
+        reorderedList.splice(newPosition, 0, movedItem);
+        
+        // Reorder all sections with new sequential positions
+        for (let i = 0; i < reorderedList.length; i++) {
+          await window.api.sections.reorder(reorderedList[i].id, i + 1);
+        }
+      }
+      
+      const updatedSections = await window.api.sections.getAll();
+      setSections(updatedSections);
+    } catch (error) {
+      console.error('Error reordering section:', error);
+    }
+  };
+
+  const handleReorderPage = async (pageId, newPosition) => {
+    try {
+      const currentPage = pages.find(p => p.id === pageId);
+      if (!currentPage) return;
+      
+      const sectionPages = pages
+        .filter(p => p.section_id === currentPage.section_id && !p.favorite)
+        .sort((a, b) => a.position - b.position);
+      
+      const currentIndex = sectionPages.findIndex(p => p.id === pageId);
+      const otherPage = sectionPages[newPosition];
+      
+      if (otherPage && currentIndex !== newPosition) {
+        // Swap positions
+        const tempPos = currentPage.position;
+        await window.api.pages.reorder(currentPage.id, otherPage.position);
+        await window.api.pages.reorder(otherPage.id, tempPos);
+      }
+      
+      const updatedPages = await window.api.pages.getAll();
+      setPages(updatedPages);
+    } catch (error) {
+      console.error('Error reordering page:', error);
+    }
+  };
+
   const handleUpdateSection = async (sectionId, newTitle, newColor) => {
     try {
       await window.api.sections.update(sectionId, newTitle, newColor);
@@ -394,7 +472,20 @@ function App() {
 
     const handleReorderBlock = async (blockId, newPosition) => {
     try {
-      await window.api.blocks.reorder(blockId, newPosition);
+      const allBlocks = [...blocks].sort((a, b) => a.position - b.position);
+      const currentIndex = allBlocks.findIndex(b => b.id === blockId);
+
+      if (currentIndex !== newPosition - 1 && newPosition > 0 && newPosition <= allBlocks.length) {
+        const reorderedList = [...allBlocks];
+        const [movedItem] = reorderedList.splice(currentIndex, 1);
+        reorderedList.splice(newPosition - 1, 0, movedItem);
+
+        // Update all blocks with new sequential positions
+        for (let i = 0; i < reorderedList.length; i++) {
+          await window.api.blocks.reorder(reorderedList[i].id, i + 1);
+        }
+      }
+
       const blocksData = await window.api.blocks.getByPage(selectedPage.id);
       setBlocks(blocksData);
     } catch (error) {
@@ -439,9 +530,10 @@ function App() {
           onCreateSection={handleCreateSection}
           onDeleteNotebook={handleDeleteNotebook}
           onDeleteSection={handleDeleteSection}
-          onUpdateNotebook ={handleUpdateNotebook}
+          onUpdateNotebook={handleUpdateNotebook}
           onUpdateSection={handleUpdateSection}
-          searchQuery={searchQuery}
+          onReorderNotebook={handleReorderNotebook}
+          onReorderSection={handleReorderSection}
           searchResults={searchResults}
           onSearchChange={setSearchQuery}
           onSearch={handleSearch}
@@ -456,6 +548,7 @@ function App() {
           onCreatePage={handleCreatePage}
           onDeletePage={handleDeletePage}
           onToggleFavorite={handleToggleFavorite}
+          onReorderPage={handleReorderPage}
           style={{ width: pagesListWidth }}
         />
         <div className="resizer" onMouseDown={startResizingPagesList}></div>
