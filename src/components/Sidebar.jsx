@@ -1,209 +1,7 @@
-import React, { useState, useRef } from 'react';
-import { useDrag, useDrop } from 'react-dnd';
-import { ItemTypes } from '../ItemTypes';
+import React, { useState } from 'react';
 
 // Emoji picker for notebook icons
 const NOTEBOOK_ICONS = ['📓', '📕', '📗', '📘', '📙', '📔', '📒', '📑', '🗒️', '📝', '✏️', '📋', '📄', '📃', '📰', '📑'];
-
-function DraggableNotebookItem({ notebook, index, moveNotebook, selectedNotebook, onNotebookSelect, onUpdateNotebook, onDeleteNotebook, expandedNotebooks, toggleNotebook, editingNotebookId, editedNotebookName, setEditedNotebookName, setEditingNotebookId, showIconPicker, setShowIconPicker }) {
-  const ref = useRef(null);
-  const [{ handlerId }, drop] = useDrop({
-    accept: ItemTypes.NOTEBOOK,
-    collect(monitor) {
-      return {
-        handlerId: monitor.getHandlerId(),
-      };
-    },
-    hover(item, monitor) {
-      if (!ref.current) {
-        return;
-      }
-      const dragIndex = item.index;
-      const hoverIndex = index;
-
-      if (dragIndex === hoverIndex) {
-        return;
-      }
-
-      const hoverBoundingRect = ref.current?.getBoundingClientRect();
-      const hoverMiddleY = (hoverBoundingRect.bottom - hoverBoundingRect.top) / 2;
-      const clientOffset = monitor.getClientOffset();
-      const hoverClientY = clientOffset.y - hoverBoundingRect.top;
-
-      if (dragIndex < hoverIndex && hoverClientY < hoverMiddleY) {
-        return;
-      }
-
-      if (dragIndex > hoverIndex && hoverClientY > hoverMiddleY) {
-        return;
-      }
-
-      moveNotebook(item.id, dragIndex, hoverIndex);
-      item.index = hoverIndex;
-    },
-  });
-
-  const [{ isDragging }, drag] = useDrag({
-    type: ItemTypes.NOTEBOOK,
-    item: () => ({ id: notebook.id, index }),
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging(),
-    }),
-  });
-
-  const opacity = isDragging ? 0 : 1;
-  drag(drop(ref));
-
-  const isExpanded = expandedNotebooks.includes(notebook.id);
-
-  return (
-    <div
-      ref={ref}
-      style={{ opacity }}
-      data-handler-id={handlerId}
-      className="mb-2"
-    >
-      <div
-        className={`notebook-item overflow-hidden ${selectedNotebook?.id === notebook.id ? 'active' : ''}`}
-        onClick={() => onNotebookSelect(notebook, true)}
-      >
-        <span
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleNotebook(notebook.id);
-          }}
-          style={{ cursor: 'pointer' }}
-        >
-          <i className={`bi bi-chevron-${isExpanded ? 'down' : 'right'} me-1`}></i>
-        </span>
-        <span
-          style={{ cursor: 'pointer', position: 'relative' }}
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowIconPicker(showIconPicker === notebook.id ? null : notebook.id);
-          }}
-          title="Click to change icon"
-        >
-          {notebook.icon}
-          {showIconPicker === notebook.id && (
-            <div
-              className="icon-picker"
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                backgroundColor: 'white',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                padding: '4px',
-                zIndex: 1000,
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: '4px',
-                minWidth: '150px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-              }}
-            >
-              {NOTEBOOK_ICONS.map(icon => (
-                <button
-                  key={icon}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUpdateNotebook(notebook.id, notebook.name, icon);
-                    setShowIconPicker(null);
-                  }}
-                  style={{
-                    border: 'none',
-                    background: 'none',
-                    fontSize: '1.2rem',
-                    cursor: 'pointer',
-                    padding: '4px',
-                    borderRadius: '4px',
-                    transition: 'background-color 0.2s',
-                  }}
-                  onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f0f0'}
-                  onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                >
-                  {icon}
-                </button>
-              ))}
-            </div>
-          )}
-        </span>
-        <span className="flex-grow-1 text-truncate">
-          {editingNotebookId === notebook.id ? (
-            <input
-              type="text"
-              className="form-control form-control-sm"
-              value={editedNotebookName}
-              onChange={(e) => setEditedNotebookName(e.target.value)}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  onUpdateNotebook(notebook.id, editedNotebookName, notebook.icon);
-                  setEditingNotebookId(null);
-                }
-              }}
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            notebook.name
-          )}
-        </span>
-        {editingNotebookId === notebook.id ? (
-          <div className="d-flex gap-1">
-            <button
-              className="btn btn-sm btn-success p-0 px-1"
-              onClick={(e) => {
-                e.stopPropagation();
-                onUpdateNotebook(notebook.id, editedNotebookName, notebook.icon);
-                setEditingNotebookId(null);
-              }}
-              title="Save Notebook Title"
-            >
-              <i className="bi bi-check-lg"></i>
-            </button>
-            <button
-              className="btn btn-sm btn-secondary p-0 px-1"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditedNotebookName(notebook.name);
-                setEditingNotebookId(null);
-              }}
-              title="Cancel Editing"
-            >
-              <i className="bi bi-x-lg"></i>
-            </button>
-          </div>
-        ) : (
-          <button
-            className="btn btn-sm btn-link text-secondary p-0 px-1"
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditedNotebookName(notebook.name);
-              setEditingNotebookId(notebook.id);
-            }}
-            title="Edit notebook title"
-            style={{ fontSize: '0.85rem' }}
-          >
-            <i className="bi bi-pencil"></i>
-          </button>
-        )}
-        <button
-          className="btn btn-sm btn-link text-danger p-0"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDeleteNotebook(notebook.id);
-          }}
-          title="Delete notebook"
-          style={{ fontSize: '0.85rem' }}
-        >
-          <i className="bi bi-trash"></i>
-        </button>
-      </div>
-    </div>
-  );
-}
 
 function Sidebar({
   notebooks,
@@ -219,6 +17,7 @@ function Sidebar({
   onUpdateNotebook,
   onUpdateSection,
   onReorderNotebook,
+  onReorderSection,
   searchQuery,
   searchResults,
   onSearchChange,
@@ -235,6 +34,7 @@ function Sidebar({
   const [editingSectionId, setEditingSectionId] = useState(null);
   const [editedSectionTitle, setEditedSectionTitle] = useState('');
   const [showIconPicker, setShowIconPicker] = useState(null);
+  const [hoveredSectionId, setHoveredSectionId] = useState(null);
 
   const toggleNotebook = (notebookId) => {
     setExpandedNotebooks(prev =>
@@ -336,109 +136,270 @@ function Sidebar({
             const isExpanded = expandedNotebooks.includes(notebook.id);
 
             return (
-              <div key={notebook.id}>
-                <DraggableNotebookItem
-                  notebook={notebook}
-                  index={index}
-                  moveNotebook={moveNotebook}
-                  selectedNotebook={selectedNotebook}
-                  onNotebookSelect={onNotebookSelect}
-                  onUpdateNotebook={onUpdateNotebook}
-                  onDeleteNotebook={onDeleteNotebook}
-                  expandedNotebooks={expandedNotebooks}
-                  toggleNotebook={toggleNotebook}
-                  editingNotebookId={editingNotebookId}
-                  editedNotebookName={editedNotebookName}
-                  setEditedNotebookName={setEditedNotebookName}
-                  setEditingNotebookId={setEditingNotebookId}
-                  showIconPicker={showIconPicker}
-                  setShowIconPicker={setShowIconPicker}
-                />
+              <div key={notebook.id} className="mb-2">
+                <div
+                  className={`notebook-item overflow-hidden ${selectedNotebook?.id === notebook.id ? 'active' : ''}`}
+                  onClick={() => onNotebookSelect(notebook, true)}
+                >
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleNotebook(notebook.id);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <i className={`bi bi-chevron-${isExpanded ? 'down' : 'right'} me-1`}></i>
+                  </span>
+                  <span
+                    style={{ cursor: 'pointer', position: 'relative' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowIconPicker(showIconPicker === notebook.id ? null : notebook.id);
+                    }}
+                    title="Click to change icon"
+                  >
+                    {notebook.icon}
+                    {showIconPicker === notebook.id && (
+                      <div
+                        className="icon-picker"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          backgroundColor: 'white',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                          padding: '4px',
+                          zIndex: 1000,
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(4, 1fr)',
+                          gap: '4px',
+                          minWidth: '150px',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                        }}
+                      >
+                        {NOTEBOOK_ICONS.map(icon => (
+                          <button
+                            key={icon}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateNotebook(notebook.id, notebook.name, icon);
+                              setShowIconPicker(null);
+                            }}
+                            style={{
+                              border: 'none',
+                              background: 'none',
+                              fontSize: '1.2rem',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              borderRadius: '4px',
+                              transition: 'background-color 0.2s',
+                            }}
+                            onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f0f0'}
+                            onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                          >
+                            {icon}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </span>
+                  <span className="flex-grow-1 text-truncate">
+                    {editingNotebookId === notebook.id ? (
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={editedNotebookName}
+                        onChange={(e) => setEditedNotebookName(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            onUpdateNotebook(notebook.id, editedNotebookName, notebook.icon);
+                            setEditingNotebookId(null);
+                          }
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      notebook.name
+                    )}
+                  </span>
+                  {editingNotebookId === notebook.id ? (
+                    <div className="d-flex gap-1">
+                      <button
+                        className="btn btn-sm btn-success p-0 px-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdateNotebook(notebook.id, editedNotebookName, notebook.icon);
+                          setEditingNotebookId(null);
+                        }}
+                        title="Save Notebook Title"
+                      >
+                        <i className="bi bi-check-lg"></i>
+                      </button>
+                      <button
+                        className="btn btn-sm btn-secondary p-0 px-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditedNotebookName(notebook.name);
+                          setEditingNotebookId(null);
+                        }}
+                        title="Cancel Editing"
+                      >
+                        <i className="bi bi-x-lg"></i>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="btn btn-sm btn-link text-secondary p-0 px-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditedNotebookName(notebook.name);
+                        setEditingNotebookId(notebook.id);
+                      }}
+                      title="Edit notebook title"
+                      style={{ fontSize: '0.85rem' }}
+                    >
+                      <i className="bi bi-pencil"></i>
+                    </button>
+                  )}
+                  <button
+                    className="btn btn-sm btn-link text-danger p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteNotebook(notebook.id);
+                    }}
+                    title="Delete notebook"
+                    style={{ fontSize: '0.85rem' }}
+                  >
+                    <i className="bi bi-trash"></i>
+                  </button>
+                </div>
 
-                {isExpanded && notebookSections.map(section => (
+                {isExpanded && notebookSections.map((section, sectionIndex) => (
                   <div
                     key={section.id}
                     className={`section-item overflow-hidden ${selectedSection?.id === section.id ? 'active' : ''}`}
+                    onMouseEnter={() => setHoveredSectionId(section.id)}
+                    onMouseLeave={() => setHoveredSectionId(null)}
                     onClick={() => onSectionSelect(section)}
                   >
-                    <span
-                      style={{
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '50%',
-                        backgroundColor: section.color,
-                        display: 'inline-block'
-                      }}
-                    ></span>
-                    <span className="flex-grow-1 text-truncate overflow-hidden">
-                      {editingSectionId === section.id ? (
-                        <input
-                          type="text"
-                          className="form-control form-control-sm"
-                          value={editedSectionTitle}
-                          onChange={(e) => setEditedSectionTitle(e.target.value)}
-                          onKeyPress={(e) => {
-                            if (e.key === 'Enter') {
-                              onUpdateSection(section.id, editedSectionTitle, section.color);
-                              setEditingSectionId(null);
-                            }
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ) : (
-                        section.title
-                      )}
-                    </span>
-                    {editingSectionId === section.id ? (
-                      <div className="d-flex gap-1">
+                    <div className="d-flex align-items-center gap-1">
+                      <div style={{
+                        display: 'flex',
+                        gap: '2px',
+                        opacity: hoveredSectionId === section.id ? 1 : 0,
+                        transition: 'opacity 0.2s',
+                        minWidth: '50px'
+                      }}>
                         <button
-                          className="btn btn-sm btn-success p-0 px-1"
+                          className="btn btn-sm btn-link text-secondary p-0"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onUpdateSection(section.id, editedSectionTitle, section.color);
-                            setEditingSectionId(null);
+                            if (sectionIndex > 0) {
+                              onReorderSection(section.id, sectionIndex - 1);
+                            }
                           }}
-                          title="Save Section Title"
+                          disabled={sectionIndex === 0}
+                          title="Move up"
+                          style={{ fontSize: '0.75rem' }}
                         >
-                          <i className="bi bi-check-lg"></i>
+                          <i className="bi bi-arrow-up"></i>
                         </button>
                         <button
-                          className="btn btn-sm btn-secondary p-0 px-1"
+                          className="btn btn-sm btn-link text-secondary p-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (sectionIndex < notebookSections.length - 1) {
+                              onReorderSection(section.id, sectionIndex + 1);
+                            }
+                          }}
+                          disabled={sectionIndex === notebookSections.length - 1}
+                          title="Move down"
+                          style={{ fontSize: '0.75rem' }}
+                        >
+                          <i className="bi bi-arrow-down"></i>
+                        </button>
+                      </div>
+                      <span
+                        style={{
+                          width: '8px',
+                          height: '8px',
+                          borderRadius: '50%',
+                          backgroundColor: section.color,
+                          display: 'inline-block'
+                        }}
+                      ></span>
+                      <span className="flex-grow-1 text-truncate overflow-hidden">
+                        {editingSectionId === section.id ? (
+                          <input
+                            type="text"
+                            className="form-control form-control-sm"
+                            value={editedSectionTitle}
+                            onChange={(e) => setEditedSectionTitle(e.target.value)}
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') {
+                                onUpdateSection(section.id, editedSectionTitle, section.color);
+                                setEditingSectionId(null);
+                              }
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          section.title
+                        )}
+                      </span>
+                      {editingSectionId === section.id ? (
+                        <div className="d-flex gap-1">
+                          <button
+                            className="btn btn-sm btn-success p-0 px-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateSection(section.id, editedSectionTitle, section.color);
+                              setEditingSectionId(null);
+                            }}
+                            title="Save Section Title"
+                          >
+                            <i className="bi bi-check-lg"></i>
+                          </button>
+                          <button
+                            className="btn btn-sm btn-secondary p-0 px-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditedSectionTitle(section.title);
+                              setEditingSectionId(null);
+                            }}
+                            title="Cancel Editing"
+                          >
+                            <i className="bi bi-x-lg"></i>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          className="btn btn-sm btn-link text-secondary p-0 px-1"
                           onClick={(e) => {
                             e.stopPropagation();
                             setEditedSectionTitle(section.title);
-                            setEditingSectionId(null);
+                            setEditingSectionId(section.id);
                           }}
-                          title="Cancel Editing"
+                          title="Edit section title"
+                          style={{ fontSize: '0.75rem' }}
                         >
-                          <i className="bi bi-x-lg"></i>
+                          <i className="bi bi-pencil"></i>
                         </button>
-                      </div>
-                    ) : (
+                      )}
                       <button
-                        className="btn btn-sm btn-link text-secondary p-0 px-1"
+                        className="btn btn-sm btn-link text-danger p-0"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setEditedSectionTitle(section.title);
-                          setEditingSectionId(section.id);
+                          onDeleteSection(section.id);
                         }}
-                        title="Edit section title"
+                        title="Delete section"
                         style={{ fontSize: '0.75rem' }}
                       >
-                        <i className="bi bi-pencil"></i>
+                        <i className="bi bi-trash"></i>
                       </button>
-                    )}
-                    <button
-                      className="btn btn-sm btn-link text-danger p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteSection(section.id);
-                      }}
-                      title="Delete section"
-                      style={{ fontSize: '0.75rem' }}
-                    >
-                      <i className="bi bi-trash"></i>
-                    </button>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -270,6 +270,24 @@ function App() {
     }
   };
 
+  const handleReorderSection = async (sectionId, newPosition) => {
+    try {
+      await window.api.sections.reorder(sectionId, newPosition);
+      await loadData();
+    } catch (error) {
+      console.error('Error reordering section:', error);
+    }
+  };
+
+  const handleReorderPage = async (pageId, newPosition) => {
+    try {
+      await window.api.pages.reorder(pageId, newPosition);
+      await loadData();
+    } catch (error) {
+      console.error('Error reordering page:', error);
+    }
+  };
+
   const handleUpdateSection = async (sectionId, newTitle, newColor) => {
     try {
       await window.api.sections.update(sectionId, newTitle, newColor);
@@ -466,6 +484,7 @@ function App() {
           onCreatePage={handleCreatePage}
           onDeletePage={handleDeletePage}
           onToggleFavorite={handleToggleFavorite}
+          onReorderPage={handleReorderPage}
           style={{ width: pagesListWidth }}
         />
         <div className="resizer" onMouseDown={startResizingPagesList}></div>
