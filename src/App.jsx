@@ -261,6 +261,15 @@ function App() {
     }
   };
 
+  const handleReorderNotebook = async (notebookId, newPosition) => {
+    try {
+      await window.api.notebooks.reorder(notebookId, newPosition);
+      await loadData();
+    } catch (error) {
+      console.error('Error reordering notebook:', error);
+    }
+  };
+
   const handleUpdateSection = async (sectionId, newTitle, newColor) => {
     try {
       await window.api.sections.update(sectionId, newTitle, newColor);
@@ -439,8 +448,9 @@ function App() {
           onCreateSection={handleCreateSection}
           onDeleteNotebook={handleDeleteNotebook}
           onDeleteSection={handleDeleteSection}
-          onUpdateNotebook ={handleUpdateNotebook}
+          onUpdateNotebook={handleUpdateNotebook}
           onUpdateSection={handleUpdateSection}
+          onReorderNotebook={handleReorderNotebook}
           searchQuery={searchQuery}
           searchResults={searchResults}
           onSearchChange={setSearchQuery}
