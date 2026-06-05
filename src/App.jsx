@@ -263,7 +263,20 @@ function App() {
 
   const handleReorderNotebook = async (notebookId, newPosition) => {
     try {
-      await window.api.notebooks.reorder(notebookId, newPosition);
+      const currentNotebook = notebooks.find(n => n.id === notebookId);
+      if (!currentNotebook) return;
+      
+      const allNotebooks = [...notebooks].sort((a, b) => a.position - b.position);
+      const currentIndex = allNotebooks.findIndex(n => n.id === notebookId);
+      const otherNotebook = allNotebooks[newPosition];
+      
+      if (otherNotebook && currentIndex !== newPosition) {
+        // Swap positions
+        const tempPos = currentNotebook.position;
+        await window.api.notebooks.reorder(currentNotebook.id, otherNotebook.position);
+        await window.api.notebooks.reorder(otherNotebook.id, tempPos);
+      }
+      
       const updatedNotebooks = await window.api.notebooks.getAll();
       setNotebooks(updatedNotebooks);
     } catch (error) {
@@ -273,7 +286,23 @@ function App() {
 
   const handleReorderSection = async (sectionId, newPosition) => {
     try {
-      await window.api.sections.reorder(sectionId, newPosition);
+      const currentSection = sections.find(s => s.id === sectionId);
+      if (!currentSection) return;
+      
+      const notebookSections = sections
+        .filter(s => s.notebook_id === currentSection.notebook_id)
+        .sort((a, b) => a.position - b.position);
+      
+      const currentIndex = notebookSections.findIndex(s => s.id === sectionId);
+      const otherSection = notebookSections[newPosition];
+      
+      if (otherSection && currentIndex !== newPosition) {
+        // Swap positions
+        const tempPos = currentSection.position;
+        await window.api.sections.reorder(currentSection.id, otherSection.position);
+        await window.api.sections.reorder(otherSection.id, tempPos);
+      }
+      
       const updatedSections = await window.api.sections.getAll();
       setSections(updatedSections);
     } catch (error) {
@@ -283,7 +312,23 @@ function App() {
 
   const handleReorderPage = async (pageId, newPosition) => {
     try {
-      await window.api.pages.reorder(pageId, newPosition);
+      const currentPage = pages.find(p => p.id === pageId);
+      if (!currentPage) return;
+      
+      const sectionPages = pages
+        .filter(p => p.section_id === currentPage.section_id && !p.favorite)
+        .sort((a, b) => a.position - b.position);
+      
+      const currentIndex = sectionPages.findIndex(p => p.id === pageId);
+      const otherPage = sectionPages[newPosition];
+      
+      if (otherPage && currentIndex !== newPosition) {
+        // Swap positions
+        const tempPos = currentPage.position;
+        await window.api.pages.reorder(currentPage.id, otherPage.position);
+        await window.api.pages.reorder(otherPage.id, tempPos);
+      }
+      
       const updatedPages = await window.api.pages.getAll();
       setPages(updatedPages);
     } catch (error) {
