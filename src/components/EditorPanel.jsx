@@ -123,7 +123,7 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
       const reorderedBlocks = Array.from(localBlocks);
       reorderedBlocks.splice(dragIndex, 1);
       reorderedBlocks.splice(hoverIndex, 0, draggedBlock);
-      await onReorderBlock(draggedBlock.id, hoverIndex);
+      await onReorderBlock(draggedBlock.id, hoverIndex + 1);
       setLocalBlocks(reorderedBlocks);
     }
   };

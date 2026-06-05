@@ -472,7 +472,20 @@ function App() {
 
     const handleReorderBlock = async (blockId, newPosition) => {
     try {
-      await window.api.blocks.reorder(blockId, newPosition);
+      const allBlocks = [...blocks].sort((a, b) => a.position - b.position);
+      const currentIndex = allBlocks.findIndex(b => b.id === blockId);
+
+      if (currentIndex !== newPosition - 1 && newPosition > 0 && newPosition <= allBlocks.length) {
+        const reorderedList = [...allBlocks];
+        const [movedItem] = reorderedList.splice(currentIndex, 1);
+        reorderedList.splice(newPosition - 1, 0, movedItem);
+
+        // Update all blocks with new sequential positions
+        for (let i = 0; i < reorderedList.length; i++) {
+          await window.api.blocks.reorder(reorderedList[i].id, i + 1);
+        }
+      }
+
       const blocksData = await window.api.blocks.getByPage(selectedPage.id);
       setBlocks(blocksData);
     } catch (error) {
