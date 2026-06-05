@@ -264,7 +264,8 @@ function App() {
   const handleReorderNotebook = async (notebookId, newPosition) => {
     try {
       await window.api.notebooks.reorder(notebookId, newPosition);
-      await loadData();
+      const updatedNotebooks = await window.api.notebooks.getAll();
+      setNotebooks(updatedNotebooks);
     } catch (error) {
       console.error('Error reordering notebook:', error);
     }
@@ -273,7 +274,8 @@ function App() {
   const handleReorderSection = async (sectionId, newPosition) => {
     try {
       await window.api.sections.reorder(sectionId, newPosition);
-      await loadData();
+      const updatedSections = await window.api.sections.getAll();
+      setSections(updatedSections);
     } catch (error) {
       console.error('Error reordering section:', error);
     }
@@ -282,7 +284,8 @@ function App() {
   const handleReorderPage = async (pageId, newPosition) => {
     try {
       await window.api.pages.reorder(pageId, newPosition);
-      await loadData();
+      const updatedPages = await window.api.pages.getAll();
+      setPages(updatedPages);
     } catch (error) {
       console.error('Error reordering page:', error);
     }
@@ -469,7 +472,7 @@ function App() {
           onUpdateNotebook={handleUpdateNotebook}
           onUpdateSection={handleUpdateSection}
           onReorderNotebook={handleReorderNotebook}
-          searchQuery={searchQuery}
+          onReorderSection={handleReorderSection}
           searchResults={searchResults}
           onSearchChange={setSearchQuery}
           onSearch={handleSearch}
