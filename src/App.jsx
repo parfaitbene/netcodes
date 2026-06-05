@@ -263,18 +263,18 @@ function App() {
 
   const handleReorderNotebook = async (notebookId, newPosition) => {
     try {
-      const currentNotebook = notebooks.find(n => n.id === notebookId);
-      if (!currentNotebook) return;
-      
       const allNotebooks = [...notebooks].sort((a, b) => a.position - b.position);
       const currentIndex = allNotebooks.findIndex(n => n.id === notebookId);
-      const otherNotebook = allNotebooks[newPosition];
       
-      if (otherNotebook && currentIndex !== newPosition) {
-        // Swap positions
-        const tempPos = currentNotebook.position;
-        await window.api.notebooks.reorder(currentNotebook.id, otherNotebook.position);
-        await window.api.notebooks.reorder(otherNotebook.id, tempPos);
+      if (currentIndex !== newPosition && newPosition >= 0 && newPosition < allNotebooks.length) {
+        const reorderedList = [...allNotebooks];
+        const [movedItem] = reorderedList.splice(currentIndex, 1);
+        reorderedList.splice(newPosition, 0, movedItem);
+        
+        // Reorder all notebooks with new sequential positions
+        for (let i = 0; i < reorderedList.length; i++) {
+          await window.api.notebooks.reorder(reorderedList[i].id, i + 1);
+        }
       }
       
       const updatedNotebooks = await window.api.notebooks.getAll();
@@ -294,13 +294,16 @@ function App() {
         .sort((a, b) => a.position - b.position);
       
       const currentIndex = notebookSections.findIndex(s => s.id === sectionId);
-      const otherSection = notebookSections[newPosition];
       
-      if (otherSection && currentIndex !== newPosition) {
-        // Swap positions
-        const tempPos = currentSection.position;
-        await window.api.sections.reorder(currentSection.id, otherSection.position);
-        await window.api.sections.reorder(otherSection.id, tempPos);
+      if (currentIndex !== newPosition && newPosition >= 0 && newPosition < notebookSections.length) {
+        const reorderedList = [...notebookSections];
+        const [movedItem] = reorderedList.splice(currentIndex, 1);
+        reorderedList.splice(newPosition, 0, movedItem);
+        
+        // Reorder all sections with new sequential positions
+        for (let i = 0; i < reorderedList.length; i++) {
+          await window.api.sections.reorder(reorderedList[i].id, i + 1);
+        }
       }
       
       const updatedSections = await window.api.sections.getAll();

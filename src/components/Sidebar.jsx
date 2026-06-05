@@ -384,10 +384,10 @@ function Sidebar({
                   >
                     <div style={{
                       display: 'flex',
-                      gap: '4px',
+                      gap: '2px',
                       opacity: hoveredSectionId === section.id ? 1 : 0,
                       transition: 'opacity 0.2s',
-                      minWidth: '60px',
+                      minWidth: '48px',
                     }}>
                       <button
                         className="btn btn-sm btn-link text-secondary p-0"
@@ -402,8 +402,8 @@ function Sidebar({
                         style={{
                           fontSize: '0.75rem',
                           cursor: sectionIndex === 0 ? 'not-allowed' : 'pointer',
-                          padding: '4px 6px',
-                          minWidth: '28px',
+                          padding: '2px 4px',
+                          minWidth: '24px',
                         }}
                       >
                         <i className="bi bi-arrow-up"></i>
@@ -421,8 +421,8 @@ function Sidebar({
                         style={{
                           fontSize: '0.75rem',
                           cursor: sectionIndex === notebookSections.length - 1 ? 'not-allowed' : 'pointer',
-                          padding: '4px 6px',
-                          minWidth: '28px',
+                          padding: '2px 4px',
+                          minWidth: '24px',
                         }}
                       >
                         <i className="bi bi-arrow-down"></i>
