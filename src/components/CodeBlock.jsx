@@ -67,7 +67,9 @@ function CodeBlock({ block, onUpdate, onDelete }) {
   };
 
   const handleLanguageChange = (e) => {
-    setLanguage(e.target.value);
+    const newLanguage = e.target.value;
+    setLanguage(newLanguage);
+    onUpdate(block.id, code, newLanguage, editedTitle);
   };
 
   return (
