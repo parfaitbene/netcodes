@@ -197,20 +197,45 @@ The code editor supports syntax highlighting for:
 
 ## Troubleshooting
 
-### Native module issues (Windows)
+### `better-sqlite3` not found (Windows)
 
-If you encounter issues with `better-sqlite3` on Windows, install the build tools:
+`better-sqlite3` is a native module that must be compiled for the exact Electron version. On Windows, this requires the **Visual Studio C++ Build Tools**.
 
-```bash
-npm install --global windows-build-tools
+**Step 1 — Install Build Tools**
+
+Open PowerShell as Administrator and run:
+
+```powershell
+winget install Microsoft.VisualStudio.2022.BuildTools --override "--quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
 ```
 
-Or install Visual Studio Build Tools manually from:
-https://visualstudio.microsoft.com/downloads/
+Or open **Visual Studio Installer** → **Modify** → check **Desktop development with C++** → **Modify**.
 
-Then rebuild the native module:
-```bash
-npx @electron/rebuild
+**Step 2 — Rebuild the native module**
+
+After installation, restart your terminal and run:
+
+```powershell
+npx electron-rebuild -f -w better-sqlite3
+```
+
+**Step 3 — Run or build**
+
+```powershell
+npm run electron        # dev mode
+npm run electron:build  # production build
+```
+
+> Note: `electron-builder` handles the rebuild automatically during `electron:build` via the `postinstall` script. The manual rebuild is only needed for `npm run electron` (dev mode).
+
+### Build fails with `Access is denied` (Windows)
+
+A previous Electron process is locking build output files. Kill all Electron processes and delete the output folder before retrying:
+
+```powershell
+Get-Process -Name "electron","netcodes" -ErrorAction SilentlyContinue | Stop-Process -Force
+Remove-Item dist-electron -Recurse -Force
+npm run electron:build
 ```
 
 ### Database issues
@@ -245,4 +270,4 @@ Parfait BENE — [parfaitbene.com](https://parfaitbene.com)
 
 ---
 
-> This project was vibecoded with [Claude Code](https://claude.ai/code) — under the supervision of a human.
+> This project was vibecoded with [Claude Code](https://claude.ai/code)
