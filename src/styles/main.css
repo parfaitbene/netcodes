@@ -441,3 +441,17 @@ body {
   text-overflow: ellipsis;
   margin-top: 2px;
 }
+
+.search-modal-group-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6c757d;
+  padding: 8px 16px 4px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.search-modal-group-label:first-child {
+  border-top: none;
+}

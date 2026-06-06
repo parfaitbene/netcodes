@@ -529,6 +529,8 @@ function App() {
       {showSearch && (
         <SearchModal
           onClose={() => setShowSearch(false)}
+          onNotebookSelect={(notebook) => { handleNotebookSelect(notebook); setShowSearch(false); }}
+          onSectionSelect={(section) => { handleSectionSelect(section); setShowSearch(false); }}
           onPageSelect={(page) => { handlePageSelect(page); setShowSearch(false); }}
         />
       )}
