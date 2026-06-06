@@ -1,9 +1,74 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useDrag, useDrop } from 'react-dnd';
 import { ItemTypes } from '../ItemTypes';
 
-// Emoji picker for notebook icons
 const NOTEBOOK_ICONS = ['📓', '📕', '📗', '📘', '📙', '📔', '📒', '📑', '🗒️', '📝', '✏️', '📋', '📄', '📃', '📰', '📑'];
+
+function IconPickerTrigger({ icon, open, onToggle, onSelect, onClose }) {
+  const triggerRef = useRef(null);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setCoords({ top: rect.bottom + 4, left: rect.left });
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = () => onClose();
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open, onClose]);
+
+  return (
+    <span ref={triggerRef} onClick={onToggle} style={{ cursor: 'pointer' }} title="Changer l'icône">
+      {icon}
+      {open && createPortal(
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            top: coords.top,
+            left: coords.left,
+            backgroundColor: 'white',
+            border: '1px solid #ccc',
+            borderRadius: '6px',
+            padding: '6px',
+            zIndex: 9999,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '4px',
+            minWidth: '150px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          }}
+        >
+          {NOTEBOOK_ICONS.map(i => (
+            <button
+              key={i}
+              onClick={(e) => { e.stopPropagation(); onSelect(i); }}
+              style={{
+                border: 'none',
+                background: 'none',
+                fontSize: '1.2rem',
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '4px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              {i}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </span>
+  );
+}
 
 function DraggableNotebookItem({
   notebook,
@@ -92,61 +157,19 @@ function DraggableNotebookItem({
         >
           <i className={`bi bi-chevron-${isExpanded ? 'down' : 'right'} me-1`}></i>
         </span>
-        <span
-          style={{ cursor: 'pointer', position: 'relative' }}
-          onClick={(e) => {
+        <IconPickerTrigger
+          icon={notebook.icon}
+          open={showIconPicker === notebook.id}
+          onToggle={(e) => {
             e.stopPropagation();
             setShowIconPicker(showIconPicker === notebook.id ? null : notebook.id);
           }}
-          title="Click to change icon"
-        >
-          {notebook.icon}
-          {showIconPicker === notebook.id && (
-            <div
-              className="icon-picker"
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                backgroundColor: 'white',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                padding: '4px',
-                zIndex: 1000,
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: '4px',
-                minWidth: '150px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-              }}
-            >
-              {NOTEBOOK_ICONS.map(icon => (
-                <button
-                  key={icon}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUpdateNotebook(notebook.id, notebook.name, icon);
-                    setShowIconPicker(null);
-                  }}
-                  style={{
-                    border: 'none',
-                    background: 'none',
-                    fontSize: '1.2rem',
-                    cursor: 'pointer',
-                    padding: '4px',
-                    borderRadius: '4px',
-                    transition: 'background-color 0.2s',
-                  }}
-                  onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f0f0'}
-                  onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                >
-                  {icon}
-                </button>
-              ))}
-            </div>
-          )}
-        </span>
+          onSelect={(icon) => {
+            onUpdateNotebook(notebook.id, notebook.name, icon);
+            setShowIconPicker(null);
+          }}
+          onClose={() => setShowIconPicker(null)}
+        />
         <span className="flex-grow-1 text-truncate">
           {editingNotebookId === notebook.id ? (
             <input
