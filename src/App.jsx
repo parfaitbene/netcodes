@@ -152,16 +152,17 @@ function App() {
     }
   };
 
-  const handlePageSelect = async (page, ) => {
+  const handlePageSelect = async (page) => {
     setSelectedPage(page);
-    const section = await window.api.sections.getById(page.section_id);
-      setSelectedSection(section);
-
     try {
+      const section = await window.api.sections.getById(page.section_id);
+      setSelectedSection(section);
+      const notebook = await window.api.notebooks.getById(section.notebook_id);
+      setSelectedNotebook(notebook);
       const blocksData = await window.api.blocks.getByPage(page.id);
       setBlocks(blocksData);
     } catch (error) {
-      console.error('Error loading blocks:', error);
+      console.error('Error loading page:', error);
     }
   };
 

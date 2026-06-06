@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useDrag, useDrop } from 'react-dnd';
 import { ItemTypes } from '../ItemTypes';
 
@@ -249,6 +249,20 @@ function Sidebar({
   const [showIconPicker, setShowIconPicker] = useState(null);
   const [hoveredSectionId, setHoveredSectionId] = useState(null);
 
+  useEffect(() => {
+    if (notebooks.length > 0) {
+      setExpandedNotebooks(notebooks.map(n => n.id));
+    }
+  }, [notebooks.length]);
+
+  useEffect(() => {
+    if (selectedNotebook) {
+      setExpandedNotebooks(prev =>
+        prev.includes(selectedNotebook.id) ? prev : [...prev, selectedNotebook.id]
+      );
+    }
+  }, [selectedNotebook?.id]);
+
   const toggleNotebook = (notebookId) => {
     setExpandedNotebooks(prev =>
       prev.includes(notebookId)
@@ -288,14 +302,14 @@ function Sidebar({
             <i className="bi bi-plus-circle me-1"></i>
             Section
           </button>
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            onClick={onOpenSearch}
+            title="Rechercher"
+          >
+            <i className="bi bi-search"></i>
+          </button>
         </div>
-        <button
-          className="btn btn-outline-secondary btn-sm w-100 mt-3 d-flex align-items-center gap-2"
-          onClick={onOpenSearch}
-        >
-          <i className="bi bi-search"></i>
-          <span className="text-muted">Rechercher...</span>
-        </button>
       </div>
 
       <div className="p-2">

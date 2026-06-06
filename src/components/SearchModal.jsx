@@ -34,6 +34,7 @@ function SearchModal({ onClose, onPageSelect }) {
             page_id: r.page_id,
             page_title: r.page_title,
             section_title: r.section_title,
+            section_id: r.section_id,
             notebook_name: r.notebook_name,
             blocks: [],
           };
@@ -54,7 +55,7 @@ function SearchModal({ onClose, onPageSelect }) {
   };
 
   const handleSelect = (result) => {
-    onPageSelect({ id: result.page_id, title: result.page_title });
+    onPageSelect({ id: result.page_id, title: result.page_title, section_id: result.section_id });
     onClose();
   };
 
