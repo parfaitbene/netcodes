@@ -4,6 +4,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import Sidebar from './components/Sidebar';
 import PagesList from './components/PagesList';
 import EditorPanel from './components/EditorPanel';
+import SearchModal from './components/SearchModal';
 
 function App() {
   // State for application data
@@ -15,43 +16,7 @@ function App() {
   const [selectedSection, setSelectedSection] = useState(null);
   const [selectedPage, setSelectedPage] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-
-  // Search handler
-  const handleSearch = async (query) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    try {
-      const results = await window.api.search.query(query);
-      const groupedResults = {};
-      results.forEach(result => {
-        if (!groupedResults[result.page_id]) {
-          groupedResults[result.page_id] = {
-            page_id: result.page_id,
-            page_title: result.page_title,
-            section_id: result.section_id,
-            section_title: result.section_title,
-            notebook_id: result.notebook_id,
-            notebook_name: result.notebook_name,
-            blocks: []
-          };
-        }
-        groupedResults[result.page_id].blocks.push({
-          block_id: result.block_id,
-          block_type: result.block_type,
-          block_title: result.block_title,
-          block_content: result.block_content,
-          block_language: result.block_language
-        });
-      });
-      setSearchResults(Object.values(groupedResults));
-    } catch (error) {
-      console.error('Error searching:', error);
-    }
-  };
+  const [showSearch, setShowSearch] = useState(false);
 
   // State for panel resizing
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -187,16 +152,17 @@ function App() {
     }
   };
 
-  const handlePageSelect = async (page, ) => {
+  const handlePageSelect = async (page) => {
     setSelectedPage(page);
-    const section = await window.api.sections.getById(page.section_id);
-      setSelectedSection(section);
-
     try {
+      const section = await window.api.sections.getById(page.section_id);
+      setSelectedSection(section);
+      const notebook = await window.api.notebooks.getById(section.notebook_id);
+      setSelectedNotebook(notebook);
       const blocksData = await window.api.blocks.getByPage(page.id);
       setBlocks(blocksData);
     } catch (error) {
-      console.error('Error loading blocks:', error);
+      console.error('Error loading page:', error);
     }
   };
 
@@ -534,10 +500,7 @@ function App() {
           onUpdateSection={handleUpdateSection}
           onReorderNotebook={handleReorderNotebook}
           onReorderSection={handleReorderSection}
-          searchResults={searchResults}
-          onSearchChange={setSearchQuery}
-          onSearch={handleSearch}
-          onPageSelect={handlePageSelect}
+          onOpenSearch={() => setShowSearch(true)}
           style={{ width: sidebarWidth }}
         />
         <div className="resizer" onMouseDown={startResizingSidebar}></div>
@@ -563,6 +526,14 @@ function App() {
           style={{ flexGrow: 1 }}
         />
       </div>
+      {showSearch && (
+        <SearchModal
+          onClose={() => setShowSearch(false)}
+          onNotebookSelect={(notebook) => { handleNotebookSelect(notebook); setShowSearch(false); }}
+          onSectionSelect={(section) => { handleSectionSelect(section); setShowSearch(false); }}
+          onPageSelect={(page) => { handlePageSelect(page); setShowSearch(false); }}
+        />
+      )}
     </DndProvider>
   );
 }
