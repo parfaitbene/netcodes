@@ -33,7 +33,7 @@ A cross-platform desktop application for developers to store, organize, and mana
 
 ## Tech Stack
 
-- **Electron** — Desktop application framework
+- **Electron 40** — Desktop application framework
 - **React** — UI library
 - **Vite** — Build tool and dev server
 - **SQLite (better-sqlite3)** — Local database
@@ -81,7 +81,7 @@ netcodes/
 
 ### Prerequisites
 
-- Node.js v18 or higher
+- Node.js v20 or higher
 - npm
 
 ### Setup Steps
@@ -196,6 +196,34 @@ The code editor supports syntax highlighting for:
 - Plain Text
 
 ## Troubleshooting
+
+### Build fails on macOS (`better-sqlite3` prebuild not found)
+
+This happens when the Electron version in use is not supported by the installed `better-sqlite3` version, or when a previous build left a `build/` directory owned by `root` inside `node_modules/better-sqlite3`.
+
+**Symptoms**
+
+```
+prebuild-install warn install No prebuilt binaries found (target=X.X.X runtime=electron ...)
+gyp ERR! stack Error: EACCES: permission denied, unlink 'build/config.gypi'
+```
+
+**Fix**
+
+1. Fix permissions on the native build directory:
+   ```bash
+   sudo chown -R $(whoami) node_modules/better-sqlite3/build/
+   ```
+
+2. Reinstall and rebuild:
+   ```bash
+   npm install
+   npm run electron:build
+   ```
+
+> `better-sqlite3@12` requires **Electron 29 or higher**. The project ships with Electron 40 which is fully compatible.
+
+---
 
 ### `better-sqlite3` not found (Windows)
 

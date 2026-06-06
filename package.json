@@ -41,7 +41,7 @@
     "@vitejs/plugin-react": "^4.2.1",
     "@vitest/coverage-v8": "^4.1.8",
     "concurrently": "^8.2.2",
-    "electron": "^28.2.0",
+    "electron": "^40.3.3",
     "electron-builder": "^24.9.1",
     "electron-rebuild": "^3.2.9",
     "vite": "^5.0.12",
@@ -59,6 +59,9 @@
       "dist/**/*",
       "electron/**/*",
       "build/**/*",
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "asarUnpack": [
       "node_modules/better-sqlite3/**/*"
     ],
     "win": {
