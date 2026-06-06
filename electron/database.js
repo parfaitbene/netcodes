@@ -108,6 +108,13 @@ export const sectionOps = {
   reorder: (id, newPosition) => {
     const stmt = db.prepare('UPDATE sections SET position = ? WHERE id = ?');
     return stmt.run(newPosition, id);
+  },
+
+  move: (id, newNotebookId) => {
+    const maxPos = db.prepare('SELECT MAX(position) as max FROM sections WHERE notebook_id = ?').get(newNotebookId);
+    const position = (maxPos.max || 0) + 1;
+    const stmt = db.prepare('UPDATE sections SET notebook_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    return stmt.run(newNotebookId, position, id);
   }
 };
 
@@ -159,6 +166,13 @@ export const pageOps = {
   reorder: (id, newPosition) => {
     const stmt = db.prepare('UPDATE pages SET position = ? WHERE id = ?');
     return stmt.run(newPosition, id);
+  },
+
+  move: (id, newSectionId) => {
+    const maxPos = db.prepare('SELECT MAX(position) as max FROM pages WHERE section_id = ?').get(newSectionId);
+    const position = (maxPos.max || 0) + 1;
+    const stmt = db.prepare('UPDATE pages SET section_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    return stmt.run(newSectionId, position, id);
   }
 };
 

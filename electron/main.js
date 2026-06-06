@@ -182,6 +182,7 @@ ipcMain.handle('sections:create', (_, notebookId, title, color) => sectionOps.cr
 ipcMain.handle('sections:update', (_, id, title, color) => sectionOps.update(id, title, color));
 ipcMain.handle('sections:delete', (_, id) => sectionOps.delete(id));
 ipcMain.handle('sections:reorder', (_, id, position) => sectionOps.reorder(id, position));
+ipcMain.handle('sections:move', (_, id, notebookId) => sectionOps.move(id, notebookId));
 
 // IPC Handlers for Pages
 ipcMain.handle('pages:getAll', () => pageOps.getAll());
@@ -193,6 +194,7 @@ ipcMain.handle('pages:update', (_, id, title) => pageOps.update(id, title));
 ipcMain.handle('pages:toggleFavorite', (_, id) => pageOps.toggleFavorite(id));
 ipcMain.handle('pages:delete', (_, id) => pageOps.delete(id));
 ipcMain.handle('pages:reorder', (_, id, position) => pageOps.reorder(id, position));
+ipcMain.handle('pages:move', (_, id, sectionId) => pageOps.move(id, sectionId));
 
 // IPC Handlers for Blocks
 ipcMain.handle('blocks:getByPage', (_, pageId) => blockOps.getByPage(pageId));
