@@ -8,6 +8,7 @@ function PagesList({
   onDeletePage,
   onToggleFavorite,
   onReorderPage,
+  onMovePage,
   style,
 }) {
   const [hoveredPageId, setHoveredPageId] = useState(null);
@@ -55,12 +56,7 @@ function PagesList({
                   }}>
                     <button
                       className="btn btn-sm btn-link text-secondary p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (index > 0) {
-                          onReorderPage(page.id, index - 1);
-                        }
-                      }}
+                      onClick={(e) => { e.stopPropagation(); if (index > 0) onReorderPage(page.id, index - 1); }}
                       disabled={index === 0}
                       title="Move up"
                       style={{ fontSize: '0.75rem', lineHeight: '1' }}
@@ -69,12 +65,7 @@ function PagesList({
                     </button>
                     <button
                       className="btn btn-sm btn-link text-secondary p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (index < pages.length - 1) {
-                          onReorderPage(page.id, index + 1);
-                        }
-                      }}
+                      onClick={(e) => { e.stopPropagation(); if (index < pages.length - 1) onReorderPage(page.id, index + 1); }}
                       disabled={index === pages.length - 1}
                       title="Move down"
                       style={{ fontSize: '0.75rem', lineHeight: '1' }}
@@ -93,21 +84,22 @@ function PagesList({
                 </div>
                 <div className="d-flex gap-1">
                   <button
+                    className="btn btn-sm btn-link text-secondary p-0"
+                    onClick={(e) => { e.stopPropagation(); onMovePage(page); }}
+                    title="Déplacer vers une autre section"
+                  >
+                    <i className="bi bi-arrow-right-square"></i>
+                  </button>
+                  <button
                     className="btn btn-sm btn-link text-warning p-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleFavorite(page.id);
-                    }}
+                    onClick={(e) => { e.stopPropagation(); onToggleFavorite(page.id); }}
                     title={page.favorite ? 'Remove from favorites' : 'Add to favorites'}
                   >
                     <i className={`bi bi-star${page.favorite ? '-fill' : ''}`}></i>
                   </button>
                   <button
                     className="btn btn-sm btn-link text-danger p-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeletePage(page.id);
-                    }}
+                    onClick={(e) => { e.stopPropagation(); onDeletePage(page.id); }}
                     title="Delete page"
                   >
                     <i className="bi bi-trash"></i>

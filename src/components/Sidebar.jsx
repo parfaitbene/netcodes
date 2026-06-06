@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useDrag, useDrop } from 'react-dnd';
 import { ItemTypes } from '../ItemTypes';
 
@@ -236,12 +236,8 @@ function Sidebar({
   onUpdateSection,
   onReorderNotebook,
   onReorderSection,
-  searchQuery,
-  searchResults,
-  onSearchChange,
-  onSearch,
-  onPageSelect,
-  pages = [],
+  onMoveSection,
+  onOpenSearch,
   style,
 }) {
   const [expandedNotebooks, setExpandedNotebooks] = useState(
@@ -253,6 +249,20 @@ function Sidebar({
   const [editedSectionTitle, setEditedSectionTitle] = useState('');
   const [showIconPicker, setShowIconPicker] = useState(null);
   const [hoveredSectionId, setHoveredSectionId] = useState(null);
+
+  useEffect(() => {
+    if (notebooks.length > 0) {
+      setExpandedNotebooks(notebooks.map(n => n.id));
+    }
+  }, [notebooks.length]);
+
+  useEffect(() => {
+    if (selectedNotebook) {
+      setExpandedNotebooks(prev =>
+        prev.includes(selectedNotebook.id) ? prev : [...prev, selectedNotebook.id]
+      );
+    }
+  }, [selectedNotebook?.id]);
 
   const toggleNotebook = (notebookId) => {
     setExpandedNotebooks(prev =>
@@ -293,53 +303,14 @@ function Sidebar({
             <i className="bi bi-plus-circle me-1"></i>
             Section
           </button>
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            onClick={onOpenSearch}
+            title="Rechercher"
+          >
+            <i className="bi bi-search"></i>
+          </button>
         </div>
-        <div className="input-group input-group-sm mt-3">
-          <span className="input-group-text"><i className="bi bi-search"></i></span>
-          <input
-            type="text"
-            className="form-control form-control-sm"
-            placeholder="Search..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            onKeyUp={(e) => onSearch(e.target.value)}
-          />
-          {searchQuery && (
-            <button
-              className="btn btn-outline-secondary btn-sm"
-              type="button"
-              onClick={() => { onSearchChange(''); onSearch(''); }}
-              title="Effacer la recherche"
-            >
-              <i className="bi bi-x-lg"></i>
-            </button>
-          )}
-        </div>
-        {searchResults.length > 0 && searchQuery && (
-          <div className="search-results-overlay">
-            {searchResults.map(result => {
-              const resultPage = pages.find(p => p.id === result.page_id);
-              return resultPage ? (
-                <div
-                  key={result.page_id}
-                  className="search-result-item"
-                  onClick={() => onPageSelect(resultPage)}
-                >
-                  <div className="search-result-header">
-                    <span className="fw-bold text-truncate">{result.page_title}</span>
-                    <span className="text-muted small">{result.section_title}</span>
-                  </div>
-                  {result.blocks.slice(0, 2).map((block, idx) => (
-                    <div key={idx} className="search-result-block-snippet">
-                      {block.block_title && <span className="fw-bold text-truncate">{block.block_title}</span>}
-                      <span className="text-muted text-truncate d-block">{block.block_content?.substring(0, 80)}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : null;
-            })}
-          </div>
-        )}
       </div>
 
       <div className="p-2">
@@ -496,6 +467,17 @@ function Sidebar({
                         <i className="bi bi-pencil"></i>
                       </button>
                     )}
+                    <button
+                      className="btn btn-sm btn-link text-secondary p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onMoveSection(section);
+                      }}
+                      title="Déplacer vers un autre notebook"
+                      style={{ fontSize: '0.75rem' }}
+                    >
+                      <i className="bi bi-arrow-right-square"></i>
+                    </button>
                     <button
                       className="btn btn-sm btn-link text-danger p-0"
                       onClick={(e) => {

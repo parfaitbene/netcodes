@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('api', {
     update: (id, title, color) => ipcRenderer.invoke('sections:update', id, title, color),
     delete: (id) => ipcRenderer.invoke('sections:delete', id),
     reorder: (id, position) => ipcRenderer.invoke('sections:reorder', id, position),
+    move: (id, notebookId) => ipcRenderer.invoke('sections:move', id, notebookId),
   },
 
   // Page operations
@@ -35,6 +36,7 @@ contextBridge.exposeInMainWorld('api', {
     toggleFavorite: (id) => ipcRenderer.invoke('pages:toggleFavorite', id),
     delete: (id) => ipcRenderer.invoke('pages:delete', id),
     reorder: (id, position) => ipcRenderer.invoke('pages:reorder', id, position),
+    move: (id, sectionId) => ipcRenderer.invoke('pages:move', id, sectionId),
   },
 
   // Block operations

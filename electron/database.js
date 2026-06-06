@@ -16,6 +16,8 @@ export function initDatabase(dbPath) {
 
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
+  db.pragma('integrity_check');
+  db.exec('REINDEX;');
 
   // Read and execute schema
   const schemaPath = path.join(__dirname, 'schema.sql');
@@ -106,6 +108,13 @@ export const sectionOps = {
   reorder: (id, newPosition) => {
     const stmt = db.prepare('UPDATE sections SET position = ? WHERE id = ?');
     return stmt.run(newPosition, id);
+  },
+
+  move: (id, newNotebookId) => {
+    const maxPos = db.prepare('SELECT MAX(position) as max FROM sections WHERE notebook_id = ?').get(newNotebookId);
+    const position = (maxPos.max || 0) + 1;
+    const stmt = db.prepare('UPDATE sections SET notebook_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    return stmt.run(newNotebookId, position, id);
   }
 };
 
@@ -157,6 +166,13 @@ export const pageOps = {
   reorder: (id, newPosition) => {
     const stmt = db.prepare('UPDATE pages SET position = ? WHERE id = ?');
     return stmt.run(newPosition, id);
+  },
+
+  move: (id, newSectionId) => {
+    const maxPos = db.prepare('SELECT MAX(position) as max FROM pages WHERE section_id = ?').get(newSectionId);
+    const position = (maxPos.max || 0) + 1;
+    const stmt = db.prepare('UPDATE pages SET section_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    return stmt.run(newSectionId, position, id);
   }
 };
 
@@ -234,7 +250,24 @@ export const tagOps = {
 export const searchOps = {
   search: (query) => {
     const term = `%${query}%`;
-    const stmt = db.prepare(`
+
+    const notebooks = db.prepare(`
+      SELECT id AS notebook_id, name AS notebook_name
+      FROM notebooks
+      WHERE name LIKE ?
+      ORDER BY name
+    `).all(term);
+
+    const sections = db.prepare(`
+      SELECT s.id AS section_id, s.title AS section_title,
+             n.id AS notebook_id, n.name AS notebook_name
+      FROM sections s
+      JOIN notebooks n ON s.notebook_id = n.id
+      WHERE s.title LIKE ?
+      ORDER BY s.title
+    `).all(term);
+
+    const pages = db.prepare(`
       SELECT DISTINCT
         p.id        AS page_id,
         p.title     AS page_title,
@@ -243,22 +276,20 @@ export const searchOps = {
         n.id        AS notebook_id,
         n.name      AS notebook_name,
         b.id        AS block_id,
-        b.type      AS block_type,
         b.title     AS block_title,
         b.content   AS block_content,
         b.language  AS block_language
       FROM pages p
-      JOIN sections  s ON p.section_id   = s.id
-      JOIN notebooks n ON s.notebook_id  = n.id
-      LEFT JOIN blocks b ON b.page_id    = p.id
-      WHERE p.title   LIKE ?
-         OR s.title   LIKE ?
-         OR n.name    LIKE ?
-         OR b.title   LIKE ?
+      JOIN sections s ON p.section_id = s.id
+      JOIN notebooks n ON s.notebook_id = n.id
+      LEFT JOIN blocks b ON b.page_id = p.id
+      WHERE p.title LIKE ?
+         OR b.title LIKE ?
          OR b.content LIKE ?
       ORDER BY p.updated_at DESC
-    `);
-    return stmt.all(term, term, term, term, term);
+    `).all(term, term, term);
+
+    return { notebooks, sections, pages };
   }
 };
 
