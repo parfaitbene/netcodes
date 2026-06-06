@@ -26,8 +26,10 @@
   "license": "MIT",
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
+    "better-sqlite3": "^12.10.0",
     "custom-electron-prompt": "^1.5.8",
     "docx": "^9.7.1",
+    "dompurify": "^3.4.8",
     "marked": "^11.1.1",
     "react": "^18.2.0",
     "react-dnd": "^16.0.1",
@@ -38,7 +40,6 @@
     "@electron/rebuild": "^3.7.2",
     "@vitejs/plugin-react": "^4.2.1",
     "@vitest/coverage-v8": "^4.1.8",
-    "better-sqlite3": "^12.10.0",
     "concurrently": "^8.2.2",
     "electron": "^28.2.0",
     "electron-builder": "^24.9.1",
@@ -57,19 +58,17 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "build/**/*"
+      "build/**/*",
+      "node_modules/better-sqlite3/**/*"
     ],
     "win": {
-      "target": "nsis",
-      "icon": "build/icon.png"
+      "target": "nsis"
     },
     "mac": {
-      "target": "dmg",
-      "icon": "build/icon.png"
+      "target": "dmg"
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "build/icon.png"
+      "target": "AppImage"
     }
   }
 }

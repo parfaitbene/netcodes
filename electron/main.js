@@ -168,57 +168,69 @@ app.on('window-all-closed', () => {
   }
 });
 
+function toId(val) {
+  const n = parseInt(val, 10);
+  if (!Number.isInteger(n) || n <= 0) throw new Error(`Invalid ID: ${val}`);
+  return n;
+}
+
+function toPosition(val) {
+  const n = parseInt(val, 10);
+  if (!Number.isInteger(n) || n < 1) throw new Error(`Invalid position: ${val}`);
+  return n;
+}
+
 // IPC Handlers for Notebooks
 ipcMain.handle('notebooks:getAll', () => notebookOps.getAll());
-ipcMain.handle('notebooks:getById', (_, id) => notebookOps.getById(id));
+ipcMain.handle('notebooks:getById', (_, id) => notebookOps.getById(toId(id)));
 ipcMain.handle('notebooks:create', (_, name, icon) => notebookOps.create(name, icon));
-ipcMain.handle('notebooks:update', (_, id, name, icon) => notebookOps.update(id, name, icon));
-ipcMain.handle('notebooks:delete', (_, id) => notebookOps.delete(id));
-ipcMain.handle('notebooks:reorder', (_, id, position) => notebookOps.reorder(id, position));
+ipcMain.handle('notebooks:update', (_, id, name, icon) => notebookOps.update(toId(id), name, icon));
+ipcMain.handle('notebooks:delete', (_, id) => notebookOps.delete(toId(id)));
+ipcMain.handle('notebooks:reorder', (_, id, position) => notebookOps.reorder(toId(id), toPosition(position)));
 
 // IPC Handlers for Sections
 ipcMain.handle('sections:getAll', () => sectionOps.getAll());
-ipcMain.handle('sections:getByNotebook', (_, notebookId) => sectionOps.getByNotebook(notebookId));
-ipcMain.handle('sections:getById', (_, id) => sectionOps.getById(id));
-ipcMain.handle('sections:create', (_, notebookId, title, color) => sectionOps.create(notebookId, title, color));
-ipcMain.handle('sections:update', (_, id, title, color) => sectionOps.update(id, title, color));
-ipcMain.handle('sections:delete', (_, id) => sectionOps.delete(id));
-ipcMain.handle('sections:reorder', (_, id, position) => sectionOps.reorder(id, position));
-ipcMain.handle('sections:move', (_, id, notebookId) => sectionOps.move(id, notebookId));
+ipcMain.handle('sections:getByNotebook', (_, notebookId) => sectionOps.getByNotebook(toId(notebookId)));
+ipcMain.handle('sections:getById', (_, id) => sectionOps.getById(toId(id)));
+ipcMain.handle('sections:create', (_, notebookId, title, color) => sectionOps.create(toId(notebookId), title, color));
+ipcMain.handle('sections:update', (_, id, title, color) => sectionOps.update(toId(id), title, color));
+ipcMain.handle('sections:delete', (_, id) => sectionOps.delete(toId(id)));
+ipcMain.handle('sections:reorder', (_, id, position) => sectionOps.reorder(toId(id), toPosition(position)));
+ipcMain.handle('sections:move', (_, id, notebookId) => sectionOps.move(toId(id), toId(notebookId)));
 
 // IPC Handlers for Pages
 ipcMain.handle('pages:getAll', () => pageOps.getAll());
-ipcMain.handle('pages:getBySection', (_, sectionId) => pageOps.getBySection(sectionId));
-ipcMain.handle('pages:getById', (_, id) => pageOps.getById(id));
+ipcMain.handle('pages:getBySection', (_, sectionId) => pageOps.getBySection(toId(sectionId)));
+ipcMain.handle('pages:getById', (_, id) => pageOps.getById(toId(id)));
 ipcMain.handle('pages:getFavorites', () => pageOps.getFavorites());
-ipcMain.handle('pages:create', (_, sectionId, title) => pageOps.create(sectionId, title));
-ipcMain.handle('pages:update', (_, id, title) => pageOps.update(id, title));
-ipcMain.handle('pages:toggleFavorite', (_, id) => pageOps.toggleFavorite(id));
-ipcMain.handle('pages:delete', (_, id) => pageOps.delete(id));
-ipcMain.handle('pages:reorder', (_, id, position) => pageOps.reorder(id, position));
-ipcMain.handle('pages:move', (_, id, sectionId) => pageOps.move(id, sectionId));
+ipcMain.handle('pages:create', (_, sectionId, title) => pageOps.create(toId(sectionId), title));
+ipcMain.handle('pages:update', (_, id, title) => pageOps.update(toId(id), title));
+ipcMain.handle('pages:toggleFavorite', (_, id) => pageOps.toggleFavorite(toId(id)));
+ipcMain.handle('pages:delete', (_, id) => pageOps.delete(toId(id)));
+ipcMain.handle('pages:reorder', (_, id, position) => pageOps.reorder(toId(id), toPosition(position)));
+ipcMain.handle('pages:move', (_, id, sectionId) => pageOps.move(toId(id), toId(sectionId)));
 
 // IPC Handlers for Blocks
-ipcMain.handle('blocks:getByPage', (_, pageId) => blockOps.getByPage(pageId));
-ipcMain.handle('blocks:getById', (_, id) => blockOps.getById(id));
-ipcMain.handle('blocks:create', (_, pageId, type, content, language, filename) => blockOps.create(pageId, type, content, language, filename));
-ipcMain.handle('blocks:update', (_, id, content, language, title) => blockOps.update(id, content, language, title));
-ipcMain.handle('blocks:delete', (_, id) => blockOps.delete(id));
-ipcMain.handle('blocks:reorder', (_, id, position) => blockOps.reorder(id, position));
+ipcMain.handle('blocks:getByPage', (_, pageId) => blockOps.getByPage(toId(pageId)));
+ipcMain.handle('blocks:getById', (_, id) => blockOps.getById(toId(id)));
+ipcMain.handle('blocks:create', (_, pageId, type, content, language, filename) => blockOps.create(toId(pageId), type, content, language, filename));
+ipcMain.handle('blocks:update', (_, id, content, language, title) => blockOps.update(toId(id), content, language, title));
+ipcMain.handle('blocks:delete', (_, id) => blockOps.delete(toId(id)));
+ipcMain.handle('blocks:reorder', (_, id, position) => blockOps.reorder(toId(id), toPosition(position)));
 
 // IPC Handlers for Tags
 ipcMain.handle('tags:getAll', () => tagOps.getAll());
-ipcMain.handle('tags:getByPage', (_, pageId) => tagOps.getByPage(pageId));
+ipcMain.handle('tags:getByPage', (_, pageId) => tagOps.getByPage(toId(pageId)));
 ipcMain.handle('tags:create', (_, name, color) => tagOps.create(name, color));
-ipcMain.handle('tags:addToPage', (_, pageId, tagId) => tagOps.addToPage(pageId, tagId));
+ipcMain.handle('tags:addToPage', (_, pageId, tagId) => tagOps.addToPage(toId(pageId), toId(tagId)));
 
 // IPC Handlers for Search
 ipcMain.handle('search:query', (_, query) => searchOps.search(query));
 
 // IPC Handlers for Export
-ipcMain.handle('export:page', (_, pageId) => exportOps.exportPage(pageId));
-ipcMain.handle('export:section', (_, sectionId) => exportOps.exportSection(sectionId));
-ipcMain.handle('export:notebook', (_, notebookId) => exportOps.exportNotebook(notebookId));
+ipcMain.handle('export:page', (_, pageId) => exportOps.exportPage(toId(pageId)));
+ipcMain.handle('export:section', (_, sectionId) => exportOps.exportSection(toId(sectionId)));
+ipcMain.handle('export:notebook', (_, notebookId) => exportOps.exportNotebook(toId(notebookId)));
 
 ipcMain.handle('dialog:prompt', async (event, message, defaultValue = '') => {
   const result = await prompt({

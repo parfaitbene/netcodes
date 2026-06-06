@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 function TextBlock({ block, onUpdate, onDelete }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -25,10 +26,10 @@ function TextBlock({ block, onUpdate, onDelete }) {
 
   const renderMarkdown = (text) => {
     try {
-      return { __html: marked(text) };
+      return { __html: DOMPurify.sanitize(marked(text)) };
     } catch (error) {
       console.error('Error rendering markdown:', error);
-      return { __html: text };
+      return { __html: DOMPurify.sanitize(text) };
     }
   };
 
