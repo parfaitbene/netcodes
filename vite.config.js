@@ -18,4 +18,12 @@ export default defineConfig({
     port: 5200,
     strictPort: true,
   },
+  test: {
+    environment: 'node',
+    include: ['tests/**/*.test.js'],
+    coverage: {
+      provider: 'v8',
+      include: ['electron/**/*.js'],
+    },
+  },
 });
