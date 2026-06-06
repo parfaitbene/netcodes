@@ -5,6 +5,7 @@ import Sidebar from './components/Sidebar';
 import PagesList from './components/PagesList';
 import EditorPanel from './components/EditorPanel';
 import SearchModal from './components/SearchModal';
+import MoveModal from './components/MoveModal';
 
 function App() {
   // State for application data
@@ -17,6 +18,7 @@ function App() {
   const [selectedPage, setSelectedPage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showSearch, setShowSearch] = useState(false);
+  const [moveModal, setMoveModal] = useState(null); // { mode: 'page'|'section', item }
 
   // State for panel resizing
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -399,6 +401,34 @@ function App() {
     }
   };
 
+  const handleMovePage = async (pageId, newSectionId) => {
+    try {
+      await window.api.pages.move(pageId, newSectionId);
+      const updatedPages = await window.api.pages.getAll();
+      setPages(updatedPages);
+      if (selectedPage?.id === pageId) {
+        const movedPage = updatedPages.find(p => p.id === pageId);
+        if (movedPage) await handlePageSelect(movedPage);
+      }
+    } catch (error) {
+      console.error('Error moving page:', error);
+    }
+  };
+
+  const handleMoveSection = async (sectionId, newNotebookId) => {
+    try {
+      await window.api.sections.move(sectionId, newNotebookId);
+      const updatedSections = await window.api.sections.getAll();
+      setSections(updatedSections);
+      if (selectedSection?.id === sectionId) {
+        const movedSection = updatedSections.find(s => s.id === sectionId);
+        if (movedSection) await handleSectionSelect(movedSection);
+      }
+    } catch (error) {
+      console.error('Error moving section:', error);
+    }
+  };
+
   const handleToggleFavorite = async (pageId) => {
     try {
       await window.api.pages.toggleFavorite(pageId);
@@ -511,6 +541,7 @@ function App() {
           onUpdateSection={handleUpdateSection}
           onReorderNotebook={handleReorderNotebook}
           onReorderSection={handleReorderSection}
+          onMoveSection={(section) => setMoveModal({ mode: 'section', item: section })}
           onOpenSearch={() => setShowSearch(true)}
           style={{ width: sidebarWidth }}
         />
@@ -523,6 +554,7 @@ function App() {
           onDeletePage={handleDeletePage}
           onToggleFavorite={handleToggleFavorite}
           onReorderPage={handleReorderPage}
+          onMovePage={(page) => setMoveModal({ mode: 'page', item: page })}
           style={{ width: pagesListWidth }}
         />
         <div className="resizer" onMouseDown={startResizingPagesList}></div>
@@ -543,6 +575,19 @@ function App() {
           onNotebookSelect={(notebook) => { handleNotebookSelect(notebook); setShowSearch(false); }}
           onSectionSelect={(section) => { handleSectionSelect(section); setShowSearch(false); }}
           onPageSelect={(page) => { handlePageSelect(page); setShowSearch(false); }}
+        />
+      )}
+      {moveModal && (
+        <MoveModal
+          mode={moveModal.mode}
+          itemName={moveModal.item.title ?? moveModal.item.name}
+          notebooks={notebooks}
+          sections={sections.filter(s => moveModal.mode === 'page' ? s.id !== moveModal.item.section_id : s.notebook_id !== moveModal.item.id)}
+          onMove={(destId) => {
+            if (moveModal.mode === 'page') handleMovePage(moveModal.item.id, destId);
+            else handleMoveSection(moveModal.item.id, destId);
+          }}
+          onClose={() => setMoveModal(null)}
         />
       )}
     </DndProvider>

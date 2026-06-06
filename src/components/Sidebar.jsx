@@ -236,6 +236,7 @@ function Sidebar({
   onUpdateSection,
   onReorderNotebook,
   onReorderSection,
+  onMoveSection,
   onOpenSearch,
   style,
 }) {
@@ -466,6 +467,17 @@ function Sidebar({
                         <i className="bi bi-pencil"></i>
                       </button>
                     )}
+                    <button
+                      className="btn btn-sm btn-link text-secondary p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onMoveSection(section);
+                      }}
+                      title="Déplacer vers un autre notebook"
+                      style={{ fontSize: '0.75rem' }}
+                    >
+                      <i className="bi bi-arrow-right-square"></i>
+                    </button>
                     <button
                       className="btn btn-sm btn-link text-danger p-0"
                       onClick={(e) => {
