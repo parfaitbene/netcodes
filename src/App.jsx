@@ -125,6 +125,17 @@ function App() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'k' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setShowSearch(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Handlers for application logic
   const handleNotebookSelect = async (notebook, handleChildSelectection = false) => {
     setSelectedNotebook(notebook);

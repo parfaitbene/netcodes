@@ -7,7 +7,8 @@ function SearchModal({ onClose, onNotebookSelect, onSectionSelect, onPageSelect 
   const inputRef = useRef(null);
 
   useEffect(() => {
-    inputRef.current?.focus();
+    const t = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
