@@ -16,6 +16,8 @@ export function initDatabase(dbPath) {
 
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
+  db.pragma('integrity_check');
+  db.exec('REINDEX;');
 
   // Read and execute schema
   const schemaPath = path.join(__dirname, 'schema.sql');
