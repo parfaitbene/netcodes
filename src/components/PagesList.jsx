@@ -9,6 +9,7 @@ function PagesList({
   onToggleFavorite,
   onReorderPage,
   onMovePage,
+  onExportPage,
   style,
 }) {
   const [hoveredPageId, setHoveredPageId] = useState(null);
@@ -83,6 +84,13 @@ function PagesList({
                   </div>
                 </div>
                 <div className="d-flex gap-1">
+                  <button
+                    className="btn btn-sm btn-link text-secondary p-0"
+                    onClick={(e) => { e.stopPropagation(); onExportPage(page); }}
+                    title="Exporter en Word"
+                  >
+                    <i className="bi bi-file-earmark-word"></i>
+                  </button>
                   <button
                     className="btn btn-sm btn-link text-secondary p-0"
                     onClick={(e) => { e.stopPropagation(); onMovePage(page); }}

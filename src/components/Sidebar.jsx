@@ -78,6 +78,7 @@ function DraggableNotebookItem({
   onNotebookSelect,
   onUpdateNotebook,
   onDeleteNotebook,
+  onExportNotebook,
   expandedNotebooks,
   toggleNotebook,
   editingNotebookId,
@@ -229,6 +230,14 @@ function DraggableNotebookItem({
           </button>
         )}
         <button
+          className="btn btn-sm btn-link text-secondary p-0"
+          onClick={(e) => { e.stopPropagation(); onExportNotebook(notebook); }}
+          title="Exporter en Word"
+          style={{ fontSize: '0.85rem' }}
+        >
+          <i className="bi bi-file-earmark-word"></i>
+        </button>
+        <button
           className="btn btn-sm btn-link text-danger p-0"
           onClick={(e) => {
             e.stopPropagation();
@@ -260,6 +269,8 @@ function Sidebar({
   onReorderNotebook,
   onReorderSection,
   onMoveSection,
+  onExportNotebook,
+  onExportSection,
   onOpenSearch,
   style,
 }) {
@@ -357,6 +368,7 @@ function Sidebar({
                   onNotebookSelect={onNotebookSelect}
                   onUpdateNotebook={onUpdateNotebook}
                   onDeleteNotebook={onDeleteNotebook}
+                  onExportNotebook={onExportNotebook}
                   expandedNotebooks={expandedNotebooks}
                   toggleNotebook={toggleNotebook}
                   editingNotebookId={editingNotebookId}
@@ -490,6 +502,14 @@ function Sidebar({
                         <i className="bi bi-pencil"></i>
                       </button>
                     )}
+                    <button
+                      className="btn btn-sm btn-link text-secondary p-0"
+                      onClick={(e) => { e.stopPropagation(); onExportSection(section); }}
+                      title="Exporter en Word"
+                      style={{ fontSize: '0.75rem' }}
+                    >
+                      <i className="bi bi-file-earmark-word"></i>
+                    </button>
                     <button
                       className="btn btn-sm btn-link text-secondary p-0"
                       onClick={(e) => {

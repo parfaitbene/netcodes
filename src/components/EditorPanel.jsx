@@ -92,7 +92,7 @@ const DraggableBlock = ({ block, index, moveBlock, onUpdateBlock, onDeleteBlock 
   );
 };
 
-function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock, onUpdatePageTitle, onReorderBlock }) {
+function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock, onUpdatePageTitle, onReorderBlock, onExportPage }) {
   const [isTitleEditing, setIsTitleEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState(page ? page.title : '');
   const [localBlocks, setLocalBlocks] = useState([]);
@@ -198,6 +198,13 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
             >
               <i className="bi bi-code-slash me-1"></i>
               Code
+            </button>
+            <button
+              className="btn btn-sm btn-outline-secondary"
+              onClick={onExportPage}
+              title="Exporter en Word"
+            >
+              <i className="bi bi-file-earmark-word"></i>
             </button>
           </div>
         </div>

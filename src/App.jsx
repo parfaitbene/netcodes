@@ -6,6 +6,7 @@ import PagesList from './components/PagesList';
 import EditorPanel from './components/EditorPanel';
 import SearchModal from './components/SearchModal';
 import MoveModal from './components/MoveModal';
+import ExportModal from './components/ExportModal';
 
 function App() {
   // State for application data
@@ -19,6 +20,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [showSearch, setShowSearch] = useState(false);
   const [moveModal, setMoveModal] = useState(null); // { mode: 'page'|'section', item }
+  const [exportModal, setExportModal] = useState(null); // { mode: 'page'|'section'|'notebook', item }
 
   // State for panel resizing
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -542,6 +544,8 @@ function App() {
           onReorderNotebook={handleReorderNotebook}
           onReorderSection={handleReorderSection}
           onMoveSection={(section) => setMoveModal({ mode: 'section', item: section })}
+          onExportNotebook={(notebook) => setExportModal({ mode: 'notebook', item: notebook })}
+          onExportSection={(section) => setExportModal({ mode: 'section', item: section })}
           onOpenSearch={() => setShowSearch(true)}
           style={{ width: sidebarWidth }}
         />
@@ -555,6 +559,7 @@ function App() {
           onToggleFavorite={handleToggleFavorite}
           onReorderPage={handleReorderPage}
           onMovePage={(page) => setMoveModal({ mode: 'page', item: page })}
+          onExportPage={(page) => setExportModal({ mode: 'page', item: page })}
           style={{ width: pagesListWidth }}
         />
         <div className="resizer" onMouseDown={startResizingPagesList}></div>
@@ -566,6 +571,7 @@ function App() {
           onDeleteBlock={handleDeleteBlock}
           onUpdatePageTitle={handleUpdatePageTitle}
           onReorderBlock={handleReorderBlock}
+          onExportPage={selectedPage ? () => setExportModal({ mode: 'page', item: selectedPage }) : null}
           style={{ flexGrow: 1 }}
         />
       </div>
@@ -588,6 +594,16 @@ function App() {
             else handleMoveSection(moveModal.item.id, destId);
           }}
           onClose={() => setMoveModal(null)}
+        />
+      )}
+      {exportModal && (
+        <ExportModal
+          mode={exportModal.mode}
+          item={exportModal.item}
+          notebooks={notebooks}
+          sections={sections}
+          pages={pages}
+          onClose={() => setExportModal(null)}
         />
       )}
     </DndProvider>

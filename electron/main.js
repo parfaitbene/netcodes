@@ -13,6 +13,7 @@ import {
   searchOps
 } from './database.js';
 import { getDbPath, setDbPath, getDefaultDbPath } from './settings.js';
+import { exportOps } from './export.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -212,6 +213,11 @@ ipcMain.handle('tags:addToPage', (_, pageId, tagId) => tagOps.addToPage(pageId, 
 
 // IPC Handlers for Search
 ipcMain.handle('search:query', (_, query) => searchOps.search(query));
+
+// IPC Handlers for Export
+ipcMain.handle('export:page', (_, pageId) => exportOps.exportPage(pageId));
+ipcMain.handle('export:section', (_, sectionId) => exportOps.exportSection(sectionId));
+ipcMain.handle('export:notebook', (_, notebookId) => exportOps.exportNotebook(notebookId));
 
 ipcMain.handle('dialog:prompt', async (event, message, defaultValue = '') => {
   const result = await prompt({
