@@ -49,7 +49,7 @@ A cross-platform desktop application for developers to store, organize, and mana
 netcodes/
 ├── electron/
 │   ├── main.js           # Electron main process + IPC handlers
-│   ├── preload.js        # Preload script (API bridge renderer ↔ main)
+│   ├── preload.cjs       # Preload script (API bridge renderer ↔ main)
 │   ├── database.js       # All SQLite operations
 │   ├── export.js         # Word (.docx) generation
 │   ├── settings.js       # Database path management
@@ -95,7 +95,6 @@ netcodes/
    ```bash
    npm install
    ```
-   The `postinstall` script automatically rebuilds `better-sqlite3` for Electron.
 
 3. **Run in development mode**:
    ```bash
@@ -180,6 +179,8 @@ npm test
 | `npm run electron:dev` | Start Vite + Electron in development |
 | `npm run build` | Build React app for production |
 | `npm run electron:build` | Build Electron app for distribution |
+| `npm run rebuild:electron` | Rebuild `better-sqlite3` for Electron (before packaging) |
+| `npm run rebuild:node` | Rebuild `better-sqlite3` for Node.js (before running tests) |
 | `npm test` | Run unit tests |
 | `npm run test:watch` | Run tests in watch mode |
 
@@ -254,7 +255,7 @@ npm run electron        # dev mode
 npm run electron:build  # production build
 ```
 
-> Note: `electron-builder` handles the rebuild automatically during `electron:build` via the `postinstall` script. The manual rebuild is only needed for `npm run electron` (dev mode).
+> Note: `electron:build` automatically runs `rebuild:electron` before packaging. After a build, run `npm run rebuild:node` to restore `better-sqlite3` for Node.js if you need to run tests.
 
 ### Build fails with `Access is denied` (Windows)
 

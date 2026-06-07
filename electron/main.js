@@ -24,20 +24,34 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    show: false,
+    backgroundColor: '#1e1e1e',
     icon: path.join(app.getAppPath(), 'build/icon.png'),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
     },
   });
 
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error('Page failed to load:', errorCode, errorDescription, validatedURL);
+    if (app.isPackaged) {
+      const fallbackPath = path.join(app.getAppPath(), 'dist', 'index.html');
+      console.error('Retrying with fallback path:', fallbackPath);
+      mainWindow.loadFile(fallbackPath);
+    }
+  });
+
   // Load Vite dev server in development or built files in production
   if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
     mainWindow.loadURL('http://localhost:5200');
-    // mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    mainWindow.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'));
   }
 
   mainWindow.on('closed', () => {
@@ -148,8 +162,12 @@ async function handleChooseDatabase() {
 }
 
 app.whenReady().then(() => {
-  const savedDbPath = getDbPath();
-  initDatabase(savedDbPath);
+  try {
+    const savedDbPath = getDbPath();
+    initDatabase(savedDbPath);
+  } catch (err) {
+    console.error('Database init failed:', err);
+  }
 
   setupApplicationMenu();
   createWindow();

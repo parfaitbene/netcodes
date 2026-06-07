@@ -12,8 +12,9 @@
     "test:watch": "vitest",
     "electron": "electron .",
     "electron:dev": "concurrently \"npm run dev && electron .\"",
-    "electron:build": "npm run build && electron-builder",
-    "postinstall": "electron-builder install-app-deps"
+    "electron:build": "npm run build && npm run rebuild:electron && electron-builder",
+    "rebuild:electron": "electron-rebuild -f -w better-sqlite3 --module-dir .",
+    "rebuild:node": "npm rebuild better-sqlite3"
   },
   "keywords": [
     "electron",
@@ -42,7 +43,7 @@
     "@vitest/coverage-v8": "^4.1.8",
     "concurrently": "^8.2.2",
     "electron": "^40.3.3",
-    "electron-builder": "^24.9.1",
+    "electron-builder": "^26.15.0",
     "electron-rebuild": "^3.2.9",
     "vite": "^5.0.12",
     "vitest": "^4.1.8",
@@ -59,10 +60,14 @@
       "dist/**/*",
       "electron/**/*",
       "build/**/*",
-      "node_modules/better-sqlite3/**/*"
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/bindings/**/*",
+      "node_modules/file-uri-to-path/**/*"
     ],
     "asarUnpack": [
-      "node_modules/better-sqlite3/**/*"
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/bindings/**/*",
+      "node_modules/file-uri-to-path/**/*"
     ],
     "win": {
       "target": "nsis"
