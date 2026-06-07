@@ -152,6 +152,9 @@ body {
 .markdown-content {
   padding: 10px;
   line-height: 1.6;
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
 }
 
 .markdown-content h1 {

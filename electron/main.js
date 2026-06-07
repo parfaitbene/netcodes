@@ -38,6 +38,34 @@ function createWindow() {
     mainWindow.show();
   });
 
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    const menuItems = [];
+
+    if (params.selectionText) {
+      menuItems.push({
+        label: 'Copier',
+        role: 'copy',
+        enabled: params.editFlags.canCopy,
+      });
+    }
+
+    if (params.isEditable) {
+      if (params.selectionText) {
+        menuItems.push({ label: 'Couper', role: 'cut', enabled: params.editFlags.canCut });
+      }
+      menuItems.push({ label: 'Coller', role: 'paste', enabled: params.editFlags.canPaste });
+    }
+
+    if (params.selectionText || params.isEditable) {
+      menuItems.push({ type: 'separator' });
+      menuItems.push({ label: 'Sélectionner tout', role: 'selectAll' });
+    }
+
+    if (menuItems.length > 0) {
+      Menu.buildFromTemplate(menuItems).popup({ window: mainWindow });
+    }
+  });
+
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
     console.error('Page failed to load:', errorCode, errorDescription, validatedURL);
     if (app.isPackaged) {

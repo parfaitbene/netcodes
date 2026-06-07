@@ -34,7 +34,7 @@ function TextBlock({ block, onUpdate, onDelete }) {
   };
 
   return (
-    <div className="block-container" onBlur={handleSave}>
+    <div className="block-container">
       <div className="block-header">
         <div className="d-flex align-items-center gap-2 flex-grow-1">
           <i className="reorder bi bi-grip-vertical"></i>
@@ -76,6 +76,7 @@ function TextBlock({ block, onUpdate, onDelete }) {
               </button>
               <button
                 className="btn btn-sm btn-secondary"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   setIsEditing(false);
                   setContent(block.content);
@@ -90,12 +91,8 @@ function TextBlock({ block, onUpdate, onDelete }) {
       </div>
       {isEditing ? (
         <textarea
-            id="nc-text-area-content"
+          id="nc-text-area-content"
           className="form-control"
-          onBlur={() => {
-              handleSave();
-              setIsEditing(false);
-          }}
           rows="10"
           value={content}
           onChange={(e) => setContent(e.target.value)}
@@ -105,10 +102,6 @@ function TextBlock({ block, onUpdate, onDelete }) {
         <div
           className="markdown-content"
           dangerouslySetInnerHTML={renderMarkdown(content)}
-          onClick={() => {
-              setIsEditing(true);
-              document.getElementById("nc-text-area-content");
-          }}
         />
       )}
     </div>
