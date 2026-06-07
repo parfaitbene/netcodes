@@ -24,6 +24,15 @@ function TextBlock({ block, onUpdate, onDelete }) {
     }
   };
 
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      alert('Text copied to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy text:', err);
+    }
+  };
+
   const renderMarkdown = (text) => {
     try {
       return { __html: DOMPurify.sanitize(marked(text)) };
@@ -48,6 +57,13 @@ function TextBlock({ block, onUpdate, onDelete }) {
           />
         </div>
         <div className="block-actions">
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            onClick={handleCopy}
+            title="Copy to clipboard"
+          >
+            <i className="bi bi-clipboard"></i>
+          </button>
           {!isEditing ? (
             <>
               <button
