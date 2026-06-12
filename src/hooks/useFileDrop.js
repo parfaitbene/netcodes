@@ -27,7 +27,9 @@ const EXT_TO_LANGUAGE = {
 };
 
 export function detectLanguage(filename) {
-  const ext = filename.split('.').pop().toLowerCase();
+  const parts = filename.split('.');
+  if (parts.length < 2) return 'plaintext';
+  const ext = parts.pop().toLowerCase();
   return EXT_TO_LANGUAGE[ext] || 'plaintext';
 }
 
@@ -62,6 +64,10 @@ export function useFileDrop(onFileContent) {
 
   const handleFileInput = useCallback(async (file) => {
     if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Ce fichier est trop volumineux (max 5 Mo).');
+      return;
+    }
     try {
       const slice = await readFileSlice(file, 512);
       if (isBinary(slice)) {
