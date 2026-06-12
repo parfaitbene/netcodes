@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
+// src/components/TextBlock.jsx
+import React, { useState, useEffect, useRef } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { useFileDrop } from '../hooks/useFileDrop';
+import FileDropModal from './FileDropModal';
 
 function TextBlock({ block, onUpdate, onDelete }) {
   const [isEditing, setIsEditing] = useState(false);
   const [content, setContent] = useState(block.content || '');
   const [editedTitle, setEditedTitle] = useState(block.title || '');
+  const [dropPending, setDropPending] = useState(null);
+  const fileInputRef = useRef(null);
 
-  // Synchronize local state with block prop changes
   useEffect(() => {
     setContent(block.content || '');
     setEditedTitle(block.title || '');
@@ -33,6 +37,31 @@ function TextBlock({ block, onUpdate, onDelete }) {
     }
   };
 
+  const onFileContent = (newContent, filename) => {
+    if (content === '') {
+      setContent(newContent);
+      onUpdate(block.id, newContent, null, editedTitle);
+    } else {
+      setDropPending({ content: newContent, filename });
+    }
+  };
+
+  const { dragProps, isDragOver, handleFileInput } = useFileDrop(onFileContent);
+
+  const handleReplace = () => {
+    const newContent = dropPending.content;
+    setContent(newContent);
+    onUpdate(block.id, newContent, null, editedTitle);
+    setDropPending(null);
+  };
+
+  const handleAppend = () => {
+    const newContent = content + '\n' + dropPending.content;
+    setContent(newContent);
+    onUpdate(block.id, newContent, null, editedTitle);
+    setDropPending(null);
+  };
+
   const renderMarkdown = (text) => {
     try {
       return { __html: DOMPurify.sanitize(marked(text)) };
@@ -43,7 +72,10 @@ function TextBlock({ block, onUpdate, onDelete }) {
   };
 
   return (
-    <div className="block-container">
+    <div
+      className={`block-container${isDragOver ? ' drag-over' : ''}`}
+      {...dragProps}
+    >
       <div className="block-header">
         <div className="d-flex align-items-center gap-2 flex-grow-1">
           <i className="reorder bi bi-grip-vertical"></i>
@@ -57,6 +89,19 @@ function TextBlock({ block, onUpdate, onDelete }) {
           />
         </div>
         <div className="block-actions">
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={(e) => handleFileInput(e.target.files[0])}
+          />
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            onClick={() => fileInputRef.current.click()}
+            title="Importer un fichier"
+          >
+            <i className="bi bi-upload"></i>
+          </button>
           <button
             className="btn btn-sm btn-outline-secondary"
             onClick={handleCopy}
@@ -120,6 +165,13 @@ function TextBlock({ block, onUpdate, onDelete }) {
           dangerouslySetInnerHTML={renderMarkdown(content)}
         />
       )}
+      <FileDropModal
+        show={dropPending !== null}
+        filename={dropPending?.filename || ''}
+        onReplace={handleReplace}
+        onAppend={handleAppend}
+        onCancel={() => setDropPending(null)}
+      />
     </div>
   );
 }
