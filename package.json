@@ -1,6 +1,6 @@
 {
   "name": "netcodes",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Cross-platform desktop app for storing and organizing code snippets",
   "main": "electron/main.js",
   "type": "module",
@@ -53,6 +53,7 @@
     "appId": "com.netcodes.app",
     "productName": "NetCodes",
     "icon": "build/icon.png",
+    "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "dist-electron"
     },
