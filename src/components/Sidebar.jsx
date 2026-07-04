@@ -408,8 +408,10 @@ function Sidebar({
                       display: 'flex',
                       gap: '2px',
                       opacity: hoveredSectionId === section.id ? 1 : 0,
-                      transition: 'opacity 0.2s',
-                      minWidth: '48px',
+                      width: hoveredSectionId === section.id ? '48px' : '0px',
+                      overflow: 'hidden',
+                      transition: 'opacity 0.2s, width 0.2s',
+                      flexShrink: 0,
                     }}>
                       <button
                         className="btn btn-sm btn-link text-secondary p-0"
