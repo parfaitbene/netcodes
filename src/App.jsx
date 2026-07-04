@@ -594,6 +594,7 @@ function App() {
           onUpdatePageTitle={handleUpdatePageTitle}
           onReorderBlock={handleReorderBlock}
           onExportPage={selectedPage ? () => setExportModal({ mode: 'page', item: selectedPage }) : null}
+          onExportBlock={(block) => setExportModal({ mode: 'block', item: block })}
           style={{ flexGrow: 1 }}
         />
       </div>

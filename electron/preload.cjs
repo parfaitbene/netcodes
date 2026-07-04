@@ -71,8 +71,9 @@ contextBridge.exposeInMainWorld('api', {
 
   // Export operations
   export: {
-    page: (pageId) => ipcRenderer.invoke('export:page', pageId),
-    section: (sectionId) => ipcRenderer.invoke('export:section', sectionId),
-    notebook: (notebookId) => ipcRenderer.invoke('export:notebook', notebookId),
+    page: (pageId, format) => ipcRenderer.invoke('export:page', pageId, format),
+    section: (sectionId, format) => ipcRenderer.invoke('export:section', sectionId, format),
+    notebook: (notebookId, format) => ipcRenderer.invoke('export:notebook', notebookId, format),
+    block: (blockId, format) => ipcRenderer.invoke('export:block', blockId, format),
   },
 });

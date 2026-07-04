@@ -4,7 +4,7 @@ import { ItemTypes } from '../ItemTypes';
 import CodeBlock from './CodeBlock';
 import TextBlock from './TextBlock';
 
-const DraggableBlock = ({ block, index, moveBlock, onUpdateBlock, onDeleteBlock }) => {
+const DraggableBlock = ({ block, index, moveBlock, onUpdateBlock, onDeleteBlock, onExportBlock }) => {
   const ref = useRef(null);
   const [{ handlerId }, drop] = useDrop({
     accept: ItemTypes.BLOCK,
@@ -80,19 +80,21 @@ const DraggableBlock = ({ block, index, moveBlock, onUpdateBlock, onDeleteBlock 
           block={block}
           onUpdate={onUpdateBlock}
           onDelete={onDeleteBlock}
+          onExport={() => onExportBlock(block)}
         />
       ) : block.type === 'code' ? (
         <CodeBlock
           block={block}
           onUpdate={onUpdateBlock}
           onDelete={onDeleteBlock}
+          onExport={() => onExportBlock(block)}
         />
       ) : null}
     </div>
   );
 };
 
-function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock, onUpdatePageTitle, onReorderBlock, onExportPage }) {
+function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock, onUpdatePageTitle, onReorderBlock, onExportPage, onExportBlock }) {
   const [isTitleEditing, setIsTitleEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState(page ? page.title : '');
   const [localBlocks, setLocalBlocks] = useState([]);
@@ -202,9 +204,9 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
             <button
               className="btn btn-sm btn-outline-secondary"
               onClick={onExportPage}
-              title="Exporter en Word"
+              title="Exporter (.docx / .md)"
             >
-              <i className="bi bi-file-earmark-word"></i>
+              <i className="bi bi-file-earmark-arrow-down"></i>
             </button>
           </div>
         </div>
@@ -229,6 +231,7 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
               moveBlock={moveBlock}
               onUpdateBlock={onUpdateBlock}
               onDeleteBlock={onDeleteBlock}
+              onExportBlock={onExportBlock}
             />
           ))
         )}

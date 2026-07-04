@@ -274,9 +274,10 @@ ipcMain.handle('tags:addToPage', (_, pageId, tagId) => tagOps.addToPage(toId(pag
 ipcMain.handle('search:query', (_, query) => searchOps.search(query));
 
 // IPC Handlers for Export
-ipcMain.handle('export:page', (_, pageId) => exportOps.exportPage(toId(pageId)));
-ipcMain.handle('export:section', (_, sectionId) => exportOps.exportSection(toId(sectionId)));
-ipcMain.handle('export:notebook', (_, notebookId) => exportOps.exportNotebook(toId(notebookId)));
+ipcMain.handle('export:page', (_, pageId, format) => exportOps.exportPage(toId(pageId), format));
+ipcMain.handle('export:section', (_, sectionId, format) => exportOps.exportSection(toId(sectionId), format));
+ipcMain.handle('export:notebook', (_, notebookId, format) => exportOps.exportNotebook(toId(notebookId), format));
+ipcMain.handle('export:block', (_, blockId, format) => exportOps.exportBlock(toId(blockId), format));
 
 ipcMain.handle('dialog:prompt', async (event, message, defaultValue = '') => {
   const result = await prompt({

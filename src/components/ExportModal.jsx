@@ -3,14 +3,16 @@ import React, { useState } from 'react';
 function ExportModal({ mode, item, notebooks, sections, pages, onClose }) {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(null);
+  const [format, setFormat] = useState('docx');
 
   const handleExport = async () => {
     setLoading(true);
     try {
       let result;
-      if (mode === 'page') result = await window.api.export.page(item.id);
-      else if (mode === 'section') result = await window.api.export.section(item.id);
-      else result = await window.api.export.notebook(item.id);
+      if (mode === 'page') result = await window.api.export.page(item.id, format);
+      else if (mode === 'section') result = await window.api.export.section(item.id, format);
+      else if (mode === 'block') result = await window.api.export.block(item.id, format);
+      else result = await window.api.export.notebook(item.id, format);
       console.log('[ExportModal] result:', result);
       setDone(result);
     } catch (err) {
@@ -22,15 +24,16 @@ function ExportModal({ mode, item, notebooks, sections, pages, onClose }) {
 
   const label = mode === 'page' ? item.title
     : mode === 'section' ? item.title
+    : mode === 'block' ? (item.title || (item.type === 'code' ? 'Bloc de code' : 'Bloc de texte'))
     : item.name;
 
   const icon = mode === 'page' ? 'bi-file-text'
     : mode === 'section' ? 'bi-collection'
+    : mode === 'block' ? (item.type === 'code' ? 'bi-code-slash' : 'bi-textarea-t')
     : 'bi-journal-text';
 
   const scope = (() => {
     if (mode === 'page') {
-      const blockCount = null;
       const sec = sections.find(s => s.id === item.section_id);
       const nb = notebooks.find(n => n.id === sec?.notebook_id);
       return `${nb?.name ?? ''} › ${sec?.title ?? ''}`;
@@ -39,6 +42,12 @@ function ExportModal({ mode, item, notebooks, sections, pages, onClose }) {
       const nb = notebooks.find(n => n.id === item.notebook_id);
       const pageCount = pages.filter(p => p.section_id === item.id).length;
       return `${nb?.name ?? ''} — ${pageCount} page${pageCount !== 1 ? 's' : ''}`;
+    }
+    if (mode === 'block') {
+      const page = pages.find(p => p.id === item.page_id);
+      const sec = sections.find(s => s.id === page?.section_id);
+      const nb = notebooks.find(n => n.id === sec?.notebook_id);
+      return `${nb?.name ?? ''} › ${sec?.title ?? ''} › ${page?.title ?? ''}`;
     }
     const secCount = sections.filter(s => s.notebook_id === item.id).length;
     const pageCount = pages.filter(p => sections.some(s => s.notebook_id === item.id && s.id === p.section_id)).length;
@@ -68,10 +77,16 @@ function ExportModal({ mode, item, notebooks, sections, pages, onClose }) {
 
           <div className="mb-4">
             <div className="text-muted small mb-1">Format</div>
-            <div className="d-flex align-items-center gap-2">
-              <i className="bi bi-file-earmark-word text-primary"></i>
-              <span>Microsoft Word (.docx)</span>
-            </div>
+            <select
+              className="form-select form-select-sm"
+              style={{ maxWidth: 240 }}
+              value={format}
+              onChange={(e) => setFormat(e.target.value)}
+              disabled={loading || done?.saved}
+            >
+              <option value="docx">Microsoft Word (.docx)</option>
+              <option value="md">Markdown (.md)</option>
+            </select>
           </div>
 
           {done && (

@@ -232,10 +232,10 @@ function DraggableNotebookItem({
         <button
           className="btn btn-sm btn-link text-secondary p-0"
           onClick={(e) => { e.stopPropagation(); onExportNotebook(notebook); }}
-          title="Exporter en Word"
+          title="Exporter (.docx / .md)"
           style={{ fontSize: '0.85rem' }}
         >
-          <i className="bi bi-file-earmark-word"></i>
+          <i className="bi bi-file-earmark-arrow-down"></i>
         </button>
         <button
           className="btn btn-sm btn-link text-danger p-0"
@@ -521,10 +521,10 @@ function Sidebar({
                     <button
                       className="btn btn-sm btn-link text-secondary p-0"
                       onClick={(e) => { e.stopPropagation(); onExportSection(section); }}
-                      title="Exporter en Word"
+                      title="Exporter (.docx / .md)"
                       style={{ fontSize: '0.75rem' }}
                     >
-                      <i className="bi bi-file-earmark-word"></i>
+                      <i className="bi bi-file-earmark-arrow-down"></i>
                     </button>
                     <button
                       className="btn btn-sm btn-link text-secondary p-0"

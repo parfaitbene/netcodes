@@ -5,7 +5,7 @@ import DOMPurify from 'dompurify';
 import { useFileDrop } from '../hooks/useFileDrop';
 import FileDropModal from './FileDropModal';
 
-function TextBlock({ block, onUpdate, onDelete }) {
+function TextBlock({ block, onUpdate, onDelete, onExport }) {
   const [isEditing, setIsEditing] = useState(false);
   const [content, setContent] = useState(block.content || '');
   const [editedTitle, setEditedTitle] = useState(block.title || '');
@@ -108,6 +108,13 @@ function TextBlock({ block, onUpdate, onDelete }) {
             title="Copy to clipboard"
           >
             <i className="bi bi-clipboard"></i>
+          </button>
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            onClick={onExport}
+            title="Exporter (.docx / .md)"
+          >
+            <i className="bi bi-file-earmark-arrow-down"></i>
           </button>
           {!isEditing ? (
             <>

@@ -152,6 +152,40 @@ function sectionToParagraphs(section, allPages) {
   return parts;
 }
 
+// ─── Block/Page/Section/Notebook → Markdown ────────────────────────────────
+
+function blockToMarkdown(block) {
+  let md = '';
+  if (block.title) md += `**${block.title}**\n\n`;
+
+  if (block.type === 'code') {
+    md += '```' + (block.language || '') + '\n' + (block.content || '') + '\n```\n\n';
+  } else {
+    md += `${(block.content || '').trim()}\n\n`;
+  }
+  return md;
+}
+
+function pageToMarkdown(page, blocks, level = 1) {
+  const db = getDatabase();
+  const pageBlocks = blocks ||
+    db.prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY position').all(page.id);
+
+  let md = `${'#'.repeat(level)} ${page.title}\n\n`;
+  for (const block of pageBlocks) md += blockToMarkdown(block);
+  return md;
+}
+
+function sectionToMarkdown(section, allPages) {
+  const db = getDatabase();
+  const pages = allPages ||
+    db.prepare('SELECT * FROM pages WHERE section_id = ? ORDER BY position').all(section.id);
+
+  let md = `# ${section.title}\n\n`;
+  for (const page of pages) md += pageToMarkdown(page, null, 2);
+  return md;
+}
+
 // ─── Build & save document ─────────────────────────────────────────────────
 
 async function saveDoc(doc, defaultName) {
@@ -163,6 +197,17 @@ async function saveDoc(doc, defaultName) {
 
   const buffer = await Packer.toBuffer(doc);
   fs.writeFileSync(filePath, buffer);
+  return { saved: true, filePath };
+}
+
+async function saveMarkdown(content, defaultName) {
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    defaultPath: `${defaultName}.md`,
+    filters: [{ name: 'Markdown', extensions: ['md'] }],
+  });
+  if (canceled || !filePath) return { saved: false };
+
+  fs.writeFileSync(filePath, content, 'utf-8');
   return { saved: true, filePath };
 }
 
@@ -183,12 +228,15 @@ function makeDoc(children, title) {
 // ─── Public API ────────────────────────────────────────────────────────────
 
 export const exportOps = {
-  exportPage: async (pageId) => {
+  exportPage: async (pageId, format = 'docx') => {
     try {
       const db = getDatabase();
       const page = db.prepare('SELECT * FROM pages WHERE id = ?').get(pageId);
       if (!page) return { saved: false, error: 'Page not found' };
 
+      if (format === 'md') {
+        return saveMarkdown(pageToMarkdown(page, null, 1), page.title);
+      }
       const doc = makeDoc(pageToParagraphs(page, null, HeadingLevel.HEADING_1), page.title);
       return saveDoc(doc, page.title);
     } catch (e) {
@@ -197,12 +245,15 @@ export const exportOps = {
     }
   },
 
-  exportSection: async (sectionId) => {
+  exportSection: async (sectionId, format = 'docx') => {
     try {
       const db = getDatabase();
       const section = db.prepare('SELECT * FROM sections WHERE id = ?').get(sectionId);
       if (!section) return { saved: false, error: 'Section not found' };
 
+      if (format === 'md') {
+        return saveMarkdown(sectionToMarkdown(section, null), section.title);
+      }
       const doc = makeDoc(sectionToParagraphs(section, null), section.title);
       return saveDoc(doc, section.title);
     } catch (e) {
@@ -211,13 +262,20 @@ export const exportOps = {
     }
   },
 
-  exportNotebook: async (notebookId) => {
+  exportNotebook: async (notebookId, format = 'docx') => {
     try {
       const db = getDatabase();
       const notebook = db.prepare('SELECT * FROM notebooks WHERE id = ?').get(notebookId);
       if (!notebook) return { saved: false, error: 'Notebook not found' };
 
       const sections = db.prepare('SELECT * FROM sections WHERE notebook_id = ? ORDER BY position').all(notebookId);
+
+      if (format === 'md') {
+        let md = `# ${notebook.name}\n\n`;
+        for (const section of sections) md += sectionToMarkdown(section, null);
+        return saveMarkdown(md, notebook.name);
+      }
+
       const children = [
         new Paragraph({
           text: notebook.name,
@@ -234,6 +292,25 @@ export const exportOps = {
       return saveDoc(doc, notebook.name);
     } catch (e) {
       console.error('[exportNotebook] error:', e);
+      return { saved: false, error: e.message };
+    }
+  },
+
+  exportBlock: async (blockId, format = 'docx') => {
+    try {
+      const db = getDatabase();
+      const block = db.prepare('SELECT * FROM blocks WHERE id = ?').get(blockId);
+      if (!block) return { saved: false, error: 'Block not found' };
+
+      const name = block.title || (block.type === 'code' ? 'code-block' : 'text-block');
+
+      if (format === 'md') {
+        return saveMarkdown(blockToMarkdown(block), name);
+      }
+      const doc = makeDoc(blockToParagraphs(block), name);
+      return saveDoc(doc, name);
+    } catch (e) {
+      console.error('[exportBlock] error:', e);
       return { saved: false, error: e.message };
     }
   },

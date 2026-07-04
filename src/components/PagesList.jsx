@@ -87,9 +87,9 @@ function PagesList({
                   <button
                     className="btn btn-sm btn-link text-secondary p-0"
                     onClick={(e) => { e.stopPropagation(); onExportPage(page); }}
-                    title="Exporter en Word"
+                    title="Exporter (.docx / .md)"
                   >
-                    <i className="bi bi-file-earmark-word"></i>
+                    <i className="bi bi-file-earmark-arrow-down"></i>
                   </button>
                   <button
                     className="btn btn-sm btn-link text-secondary p-0"

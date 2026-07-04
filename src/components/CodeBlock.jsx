@@ -30,7 +30,7 @@ const LANGUAGES = [
   { value: 'plaintext', label: 'Plain Text' },
 ];
 
-function CodeBlock({ block, onUpdate, onDelete }) {
+function CodeBlock({ block, onUpdate, onDelete, onExport }) {
   const [language, setLanguage] = useState(block.language || 'javascript');
   const [code, setCode] = useState(block.content || '');
   const [editedTitle, setEditedTitle] = useState(block.title || '');
@@ -153,6 +153,13 @@ function CodeBlock({ block, onUpdate, onDelete }) {
             title="Copy to clipboard"
           >
             <i className="bi bi-clipboard"></i>
+          </button>
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            onClick={onExport}
+            title="Exporter (.docx / .md)"
+          >
+            <i className="bi bi-file-earmark-arrow-down"></i>
           </button>
           <button
             className="btn btn-sm btn-outline-danger"
