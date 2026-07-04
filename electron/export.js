@@ -5,6 +5,7 @@ import {
 import { marked } from 'marked';
 import { dialog } from 'electron';
 import fs from 'fs';
+import path from 'path';
 import { getDatabase } from './database.js';
 
 // ─── Markdown → docx paragraphs ────────────────────────────────────────────
@@ -131,28 +132,7 @@ function pageToParagraphs(page, blocks, level = HeadingLevel.HEADING_1) {
   return parts;
 }
 
-// ─── Section → paragraphs ──────────────────────────────────────────────────
-
-function sectionToParagraphs(section, allPages) {
-  const db = getDatabase();
-  const pages = allPages ||
-    db.prepare('SELECT * FROM pages WHERE section_id = ? ORDER BY position').all(section.id);
-
-  const parts = [
-    new Paragraph({
-      text: section.title,
-      heading: HeadingLevel.HEADING_1,
-      spacing: { before: 600, after: 240 },
-    }),
-  ];
-
-  for (const page of pages) {
-    parts.push(...pageToParagraphs(page, null, HeadingLevel.HEADING_2));
-  }
-  return parts;
-}
-
-// ─── Block/Page/Section/Notebook → Markdown ────────────────────────────────
+// ─── Block/Page → Markdown ──────────────────────────────────────────────────
 
 function blockToMarkdown(block) {
   let md = '';
@@ -173,16 +153,6 @@ function pageToMarkdown(page, blocks, level = 1) {
 
   let md = `${'#'.repeat(level)} ${page.title}\n\n`;
   for (const block of pageBlocks) md += blockToMarkdown(block);
-  return md;
-}
-
-function sectionToMarkdown(section, allPages) {
-  const db = getDatabase();
-  const pages = allPages ||
-    db.prepare('SELECT * FROM pages WHERE section_id = ? ORDER BY position').all(section.id);
-
-  let md = `# ${section.title}\n\n`;
-  for (const page of pages) md += pageToMarkdown(page, null, 2);
   return md;
 }
 
@@ -225,71 +195,152 @@ function makeDoc(children, title) {
   });
 }
 
+// ─── Folder-tree export (Notebook > Section > Page > Bloc) ────────────────
+
+function sanitizeName(name) {
+  return (name || 'untitled').replace(/[\\/:*?"<>|]/g, '-').trim() || 'untitled';
+}
+
+function uniquePath(dir, base, ext = '') {
+  let candidate = path.join(dir, `${base}${ext}`);
+  let i = 2;
+  while (fs.existsSync(candidate)) {
+    candidate = path.join(dir, `${base} (${i})${ext}`);
+    i++;
+  }
+  return candidate;
+}
+
+async function writeBlockFile(destDir, block, index, format) {
+  const base = sanitizeName(block.title || `Bloc ${index + 1}`);
+  if (format === 'md') {
+    const filePath = uniquePath(destDir, base, '.md');
+    fs.writeFileSync(filePath, blockToMarkdown(block), 'utf-8');
+    return filePath;
+  }
+  const filePath = uniquePath(destDir, base, '.docx');
+  const doc = makeDoc(blockToParagraphs(block), base);
+  const buffer = await Packer.toBuffer(doc);
+  fs.writeFileSync(filePath, buffer);
+  return filePath;
+}
+
+async function exportPageIntoDir(destDir, page, format, blockLayout) {
+  const db = getDatabase();
+  const blocks = db.prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY position').all(page.id);
+
+  if (blockLayout === 'split') {
+    const pageDir = uniquePath(destDir, sanitizeName(page.title));
+    fs.mkdirSync(pageDir, { recursive: true });
+    for (let i = 0; i < blocks.length; i++) {
+      await writeBlockFile(pageDir, blocks[i], i, format);
+    }
+    return pageDir;
+  }
+
+  const base = sanitizeName(page.title);
+  if (format === 'md') {
+    const filePath = uniquePath(destDir, base, '.md');
+    fs.writeFileSync(filePath, pageToMarkdown(page, blocks, 1), 'utf-8');
+    return filePath;
+  }
+  const filePath = uniquePath(destDir, base, '.docx');
+  const doc = makeDoc(pageToParagraphs(page, blocks, HeadingLevel.HEADING_1), base);
+  const buffer = await Packer.toBuffer(doc);
+  fs.writeFileSync(filePath, buffer);
+  return filePath;
+}
+
+async function exportSectionIntoDir(destDir, section, format, blockLayout) {
+  const db = getDatabase();
+  const pages = db.prepare('SELECT * FROM pages WHERE section_id = ? ORDER BY position').all(section.id);
+  const sectionDir = uniquePath(destDir, sanitizeName(section.title));
+  fs.mkdirSync(sectionDir, { recursive: true });
+  for (const page of pages) {
+    await exportPageIntoDir(sectionDir, page, format, blockLayout);
+  }
+  return sectionDir;
+}
+
+async function exportNotebookIntoDir(destDir, notebook, format, blockLayout) {
+  const db = getDatabase();
+  const sections = db.prepare('SELECT * FROM sections WHERE notebook_id = ? ORDER BY position').all(notebook.id);
+  const notebookDir = uniquePath(destDir, sanitizeName(notebook.name));
+  fs.mkdirSync(notebookDir, { recursive: true });
+  for (const section of sections) {
+    await exportSectionIntoDir(notebookDir, section, format, blockLayout);
+  }
+  return notebookDir;
+}
+
+async function pickDestinationDir() {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openDirectory', 'createDirectory'],
+    title: 'Choisir le dossier de destination',
+  });
+  if (canceled || !filePaths?.[0]) return null;
+  return filePaths[0];
+}
+
 // ─── Public API ────────────────────────────────────────────────────────────
 
 export const exportOps = {
-  exportPage: async (pageId, format = 'docx') => {
+  // blockLayout: 'merged' (one file per page, blocks merged inside) or
+  // 'split' (one file per block, grouped in a folder per page).
+  exportPage: async (pageId, format = 'docx', blockLayout = 'merged') => {
     try {
       const db = getDatabase();
       const page = db.prepare('SELECT * FROM pages WHERE id = ?').get(pageId);
       if (!page) return { saved: false, error: 'Page not found' };
 
-      if (format === 'md') {
-        return saveMarkdown(pageToMarkdown(page, null, 1), page.title);
+      if (blockLayout !== 'split') {
+        if (format === 'md') {
+          return saveMarkdown(pageToMarkdown(page, null, 1), page.title);
+        }
+        const doc = makeDoc(pageToParagraphs(page, null, HeadingLevel.HEADING_1), page.title);
+        return saveDoc(doc, page.title);
       }
-      const doc = makeDoc(pageToParagraphs(page, null, HeadingLevel.HEADING_1), page.title);
-      return saveDoc(doc, page.title);
+
+      const destDir = await pickDestinationDir();
+      if (!destDir) return { saved: false };
+      const filePath = await exportPageIntoDir(destDir, page, format, 'split');
+      return { saved: true, filePath };
     } catch (e) {
       console.error('[exportPage] error:', e);
       return { saved: false, error: e.message };
     }
   },
 
-  exportSection: async (sectionId, format = 'docx') => {
+  // Sections always contain multiple pages, so the export always reproduces
+  // the Section > Page(> Bloc) folder structure on disk.
+  exportSection: async (sectionId, format = 'docx', blockLayout = 'merged') => {
     try {
       const db = getDatabase();
       const section = db.prepare('SELECT * FROM sections WHERE id = ?').get(sectionId);
       if (!section) return { saved: false, error: 'Section not found' };
 
-      if (format === 'md') {
-        return saveMarkdown(sectionToMarkdown(section, null), section.title);
-      }
-      const doc = makeDoc(sectionToParagraphs(section, null), section.title);
-      return saveDoc(doc, section.title);
+      const destDir = await pickDestinationDir();
+      if (!destDir) return { saved: false };
+      const filePath = await exportSectionIntoDir(destDir, section, format, blockLayout);
+      return { saved: true, filePath };
     } catch (e) {
       console.error('[exportSection] error:', e);
       return { saved: false, error: e.message };
     }
   },
 
-  exportNotebook: async (notebookId, format = 'docx') => {
+  // Notebooks always reproduce the full Notebook > Section > Page(> Bloc)
+  // folder structure on disk.
+  exportNotebook: async (notebookId, format = 'docx', blockLayout = 'merged') => {
     try {
       const db = getDatabase();
       const notebook = db.prepare('SELECT * FROM notebooks WHERE id = ?').get(notebookId);
       if (!notebook) return { saved: false, error: 'Notebook not found' };
 
-      const sections = db.prepare('SELECT * FROM sections WHERE notebook_id = ? ORDER BY position').all(notebookId);
-
-      if (format === 'md') {
-        let md = `# ${notebook.name}\n\n`;
-        for (const section of sections) md += sectionToMarkdown(section, null);
-        return saveMarkdown(md, notebook.name);
-      }
-
-      const children = [
-        new Paragraph({
-          text: notebook.name,
-          heading: HeadingLevel.TITLE,
-          spacing: { after: 400 },
-        }),
-      ];
-
-      for (const section of sections) {
-        children.push(...sectionToParagraphs(section, null));
-      }
-
-      const doc = makeDoc(children, notebook.name);
-      return saveDoc(doc, notebook.name);
+      const destDir = await pickDestinationDir();
+      if (!destDir) return { saved: false };
+      const filePath = await exportNotebookIntoDir(destDir, notebook, format, blockLayout);
+      return { saved: true, filePath };
     } catch (e) {
       console.error('[exportNotebook] error:', e);
       return { saved: false, error: e.message };

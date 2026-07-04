@@ -4,15 +4,16 @@ function ExportModal({ mode, item, notebooks, sections, pages, onClose }) {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(null);
   const [format, setFormat] = useState('docx');
+  const [blockLayout, setBlockLayout] = useState('merged');
 
   const handleExport = async () => {
     setLoading(true);
     try {
       let result;
-      if (mode === 'page') result = await window.api.export.page(item.id, format);
-      else if (mode === 'section') result = await window.api.export.section(item.id, format);
+      if (mode === 'page') result = await window.api.export.page(item.id, format, blockLayout);
+      else if (mode === 'section') result = await window.api.export.section(item.id, format, blockLayout);
       else if (mode === 'block') result = await window.api.export.block(item.id, format);
-      else result = await window.api.export.notebook(item.id, format);
+      else result = await window.api.export.notebook(item.id, format, blockLayout);
       console.log('[ExportModal] result:', result);
       setDone(result);
     } catch (err) {
@@ -88,6 +89,40 @@ function ExportModal({ mode, item, notebooks, sections, pages, onClose }) {
               <option value="md">Markdown (.md)</option>
             </select>
           </div>
+
+          {mode !== 'block' && (
+            <div className="mb-4">
+              <div className="text-muted small mb-1">Organisation des blocs</div>
+              <div className="d-flex flex-column gap-1">
+                <label className="d-flex align-items-center gap-2" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="blockLayout"
+                    checked={blockLayout === 'merged'}
+                    onChange={() => setBlockLayout('merged')}
+                    disabled={loading || done?.saved}
+                  />
+                  <span>Un seul fichier par page (blocs fusionnés)</span>
+                </label>
+                <label className="d-flex align-items-center gap-2" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="blockLayout"
+                    checked={blockLayout === 'split'}
+                    onChange={() => setBlockLayout('split')}
+                    disabled={loading || done?.saved}
+                  />
+                  <span>Un fichier par bloc (dossier par page)</span>
+                </label>
+              </div>
+              {mode !== 'page' && (
+                <div className="text-muted small mt-2">
+                  <i className="bi bi-info-circle me-1"></i>
+                  L'arborescence Notebook / Section / Page sera reproduite dans le dossier choisi.
+                </div>
+              )}
+            </div>
+          )}
 
           {done && (
             <div className={`alert ${done.saved ? 'alert-success' : 'alert-danger'} py-2 mb-3`}>
