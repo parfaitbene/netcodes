@@ -1,4 +1,105 @@
-import React, { useState } from 'react';
+import React, { useRef } from 'react';
+import { useDrag, useDrop } from 'react-dnd';
+import { ItemTypes } from '../ItemTypes';
+
+function DraggablePageItem({
+  page,
+  index,
+  movePage,
+  selectedPage,
+  onPageSelect,
+  onDeletePage,
+  onToggleFavorite,
+  onMovePage,
+  onExportPage,
+}) {
+  const ref = useRef(null);
+
+  const [{ handlerId }, drop] = useDrop({
+    accept: ItemTypes.PAGE,
+    collect(monitor) {
+      return { handlerId: monitor.getHandlerId() };
+    },
+    hover(item, monitor) {
+      if (!ref.current) return;
+      const dragIndex = item.index;
+      const hoverIndex = index;
+      if (dragIndex === hoverIndex) return;
+
+      const hoverBoundingRect = ref.current.getBoundingClientRect();
+      const hoverMiddleY = (hoverBoundingRect.bottom - hoverBoundingRect.top) / 2;
+      const clientOffset = monitor.getClientOffset();
+      const hoverClientY = clientOffset.y - hoverBoundingRect.top;
+
+      if (dragIndex < hoverIndex && hoverClientY < hoverMiddleY) return;
+      if (dragIndex > hoverIndex && hoverClientY > hoverMiddleY) return;
+
+      movePage(item.id, dragIndex, hoverIndex);
+      item.index = hoverIndex;
+    },
+  });
+
+  const [{ isDragging }, drag] = useDrag({
+    type: ItemTypes.PAGE,
+    item: () => ({ id: page.id, index }),
+    collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+  });
+
+  drag(drop(ref));
+
+  return (
+    <div
+      ref={ref}
+      data-handler-id={handlerId}
+      className={`page-item overflow-hidden ${selectedPage?.id === page.id ? 'active' : ''}`}
+      style={{ opacity: isDragging ? 0 : 1, cursor: 'grab' }}
+      onClick={() => onPageSelect(page)}
+    >
+      <div className="d-flex justify-content-between align-items-start">
+        <div className="d-flex align-items-start gap-2 flex-grow-1 overflow-hidden">
+          <div className="overflow-hidden">
+            <div className="d-flex align-items-center gap-2">
+              <span className="fw-medium overflow-hidden text-truncate">{page.title}</span>
+            </div>
+            <small className="text-muted d-block mt-1">
+              {new Date(page.updated_at).toLocaleDateString()}
+            </small>
+          </div>
+        </div>
+        <div className="d-flex gap-1">
+          <button
+            className="btn btn-sm btn-link text-secondary p-0"
+            onClick={(e) => { e.stopPropagation(); onExportPage(page); }}
+            title="Exporter (.docx / .md)"
+          >
+            <i className="bi bi-file-earmark-arrow-down"></i>
+          </button>
+          <button
+            className="btn btn-sm btn-link text-secondary p-0"
+            onClick={(e) => { e.stopPropagation(); onMovePage(page); }}
+            title="Déplacer vers une autre section"
+          >
+            <i className="bi bi-arrow-right-square"></i>
+          </button>
+          <button
+            className="btn btn-sm btn-link text-warning p-0"
+            onClick={(e) => { e.stopPropagation(); onToggleFavorite(page.id); }}
+            title={page.favorite ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <i className={`bi bi-star${page.favorite ? '-fill' : ''}`}></i>
+          </button>
+          <button
+            className="btn btn-sm btn-link text-danger p-0"
+            onClick={(e) => { e.stopPropagation(); onDeletePage(page.id); }}
+            title="Delete page"
+          >
+            <i className="bi bi-trash"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function PagesList({
   pages,
@@ -12,7 +113,12 @@ function PagesList({
   onExportPage,
   style,
 }) {
-  const [hoveredPageId, setHoveredPageId] = useState(null);
+  const movePage = async (id, dragIndex, hoverIndex) => {
+    const draggedPage = pages.find(p => p.id === id);
+    if (draggedPage) {
+      await onReorderPage(draggedPage.id, hoverIndex);
+    }
+  };
 
   return (
     <div className="pages-list" style={style}>
@@ -38,83 +144,18 @@ function PagesList({
           </div>
         ) : (
           pages.map((page, index) => (
-            <div
+            <DraggablePageItem
               key={page.id}
-              className={`page-item overflow-hidden ${selectedPage?.id === page.id ? 'active' : ''}`}
-              onMouseEnter={() => setHoveredPageId(page.id)}
-              onMouseLeave={() => setHoveredPageId(null)}
-              onClick={() => onPageSelect(page)}
-            >
-              <div className="d-flex justify-content-between align-items-start">
-                <div className="d-flex align-items-start gap-2 flex-grow-1 overflow-hidden">
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '2px',
-                    opacity: hoveredPageId === page.id ? 1 : 0,
-                    transition: 'opacity 0.2s',
-                    minWidth: '30px'
-                  }}>
-                    <button
-                      className="btn btn-sm btn-link text-secondary p-0"
-                      onClick={(e) => { e.stopPropagation(); if (index > 0) onReorderPage(page.id, index - 1); }}
-                      disabled={index === 0}
-                      title="Move up"
-                      style={{ fontSize: '0.75rem', lineHeight: '1' }}
-                    >
-                      <i className="bi bi-arrow-up"></i>
-                    </button>
-                    <button
-                      className="btn btn-sm btn-link text-secondary p-0"
-                      onClick={(e) => { e.stopPropagation(); if (index < pages.length - 1) onReorderPage(page.id, index + 1); }}
-                      disabled={index === pages.length - 1}
-                      title="Move down"
-                      style={{ fontSize: '0.75rem', lineHeight: '1' }}
-                    >
-                      <i className="bi bi-arrow-down"></i>
-                    </button>
-                  </div>
-                  <div className="overflow-hidden">
-                    <div className="d-flex align-items-center gap-2">
-                      <span className="fw-medium overflow-hidden text-truncate">{page.title}</span>
-                    </div>
-                    <small className="text-muted d-block mt-1">
-                      {new Date(page.updated_at).toLocaleDateString()}
-                    </small>
-                  </div>
-                </div>
-                <div className="d-flex gap-1">
-                  <button
-                    className="btn btn-sm btn-link text-secondary p-0"
-                    onClick={(e) => { e.stopPropagation(); onExportPage(page); }}
-                    title="Exporter (.docx / .md)"
-                  >
-                    <i className="bi bi-file-earmark-arrow-down"></i>
-                  </button>
-                  <button
-                    className="btn btn-sm btn-link text-secondary p-0"
-                    onClick={(e) => { e.stopPropagation(); onMovePage(page); }}
-                    title="Déplacer vers une autre section"
-                  >
-                    <i className="bi bi-arrow-right-square"></i>
-                  </button>
-                  <button
-                    className="btn btn-sm btn-link text-warning p-0"
-                    onClick={(e) => { e.stopPropagation(); onToggleFavorite(page.id); }}
-                    title={page.favorite ? 'Remove from favorites' : 'Add to favorites'}
-                  >
-                    <i className={`bi bi-star${page.favorite ? '-fill' : ''}`}></i>
-                  </button>
-                  <button
-                    className="btn btn-sm btn-link text-danger p-0"
-                    onClick={(e) => { e.stopPropagation(); onDeletePage(page.id); }}
-                    title="Delete page"
-                  >
-                    <i className="bi bi-trash"></i>
-                  </button>
-                </div>
-              </div>
-            </div>
+              page={page}
+              index={index}
+              movePage={movePage}
+              selectedPage={selectedPage}
+              onPageSelect={onPageSelect}
+              onDeletePage={onDeletePage}
+              onToggleFavorite={onToggleFavorite}
+              onMovePage={onMovePage}
+              onExportPage={onExportPage}
+            />
           ))
         )}
       </div>
