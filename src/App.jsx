@@ -98,8 +98,20 @@ function App() {
       setSections(sectionsData);
       setPages(pagesData);
 
-      // Auto-select first notebook and section if available
-      if (notebooksData.length > 0) {
+      // Try to restore the last active page from a previous session
+      const lastPageId = localStorage.getItem('lastActivePageId');
+      const lastPage = lastPageId ? pagesData.find(p => String(p.id) === lastPageId) : null;
+      const lastSection = lastPage ? sectionsData.find(s => s.id === lastPage.section_id) : null;
+      const lastNotebook = lastSection ? notebooksData.find(n => n.id === lastSection.notebook_id) : null;
+
+      if (lastPage && lastSection && lastNotebook) {
+        setSelectedNotebook(lastNotebook);
+        setSelectedSection(lastSection);
+        setSelectedPage(lastPage);
+        const blocksData = await window.api.blocks.getByPage(lastPage.id);
+        setBlocks(blocksData);
+      } else if (notebooksData.length > 0) {
+        // Auto-select first notebook and section if available
         setSelectedNotebook(notebooksData[0]);
         const firstSection = sectionsData.find(s => s.notebook_id === notebooksData[0].id);
         if (firstSection) {
@@ -128,6 +140,16 @@ function App() {
     }
     loadData();
   }, []);
+
+  useEffect(() => {
+    // Only persist when a page is actually selected — selectedPage is
+    // transiently null on mount (while loadData is still fetching) and
+    // when switching sections/notebooks, and we don't want those moments
+    // to erase the remembered last-active page.
+    if (selectedPage) {
+      localStorage.setItem('lastActivePageId', String(selectedPage.id));
+    }
+  }, [selectedPage]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {

@@ -29,16 +29,38 @@ body {
   width: 280px;
   background-color: #f8f9fa;
   border-right: 1px solid #dee2e6;
-  overflow-y: auto;
+  overflow: hidden;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  flex-shrink: 0;
+}
+
+.sidebar-body {
+  flex: 1;
+  overflow-y: auto;
 }
 
 .pages-list {
   width: 300px;
   background-color: #ffffff;
   border-right: 1px solid #dee2e6;
-  overflow-y: auto;
+  overflow: hidden;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pages-list-header {
+  flex-shrink: 0;
+}
+
+.pages-list-body {
+  flex: 1;
+  overflow-y: auto;
 }
 
 .editor-panel {
@@ -280,15 +302,13 @@ body {
   background: #999;
 }
 
-.sidebar,
-.pages-list,
 .editor-panel {
   overflow-y: auto;
   flex-shrink: 0;
 }
 
-.sidebar, .pages-panel {
-  min-width: 250px;
+.sidebar, .pages-list {
+  min-width: 350px;
   max-width: 50%; /* Prevent sidebar from taking too much space */
 }
 

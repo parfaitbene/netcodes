@@ -15,8 +15,8 @@ function PagesList({
   const [hoveredPageId, setHoveredPageId] = useState(null);
 
   return (
-    <div className="pages-panel" style={style}>
-      <div className="p-3 border-bottom">
+    <div className="pages-list" style={style}>
+      <div className="pages-list-header p-3 border-bottom">
         <div className="d-flex justify-content-between align-items-center mb-3">
           <h6 className="mb-0">Pages</h6>
           <button
@@ -29,7 +29,7 @@ function PagesList({
         </div>
       </div>
 
-      <div>
+      <div className="pages-list-body">
         {pages.length === 0 ? (
           <div className="text-center text-muted py-5">
             <i className="bi bi-file-earmark-text" style={{ fontSize: '3rem', opacity: 0.3 }}></i>
