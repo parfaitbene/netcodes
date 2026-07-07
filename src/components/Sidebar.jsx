@@ -78,6 +78,7 @@ function DraggableNotebookItem({
   onNotebookSelect,
   onUpdateNotebook,
   onDeleteNotebook,
+  onExportNotebook,
   expandedNotebooks,
   toggleNotebook,
   editingNotebookId,
@@ -229,6 +230,14 @@ function DraggableNotebookItem({
           </button>
         )}
         <button
+          className="btn btn-sm btn-link text-secondary p-0"
+          onClick={(e) => { e.stopPropagation(); onExportNotebook(notebook); }}
+          title="Exporter (.docx / .md)"
+          style={{ fontSize: '0.85rem' }}
+        >
+          <i className="bi bi-file-earmark-arrow-down"></i>
+        </button>
+        <button
           className="btn btn-sm btn-link text-danger p-0"
           onClick={(e) => {
             e.stopPropagation();
@@ -260,24 +269,38 @@ function Sidebar({
   onReorderNotebook,
   onReorderSection,
   onMoveSection,
+  onExportNotebook,
+  onExportSection,
   onOpenSearch,
   style,
 }) {
-  const [expandedNotebooks, setExpandedNotebooks] = useState(
-    notebooks.map(n => n.id)
-  );
+  const [expandedNotebooks, setExpandedNotebooks] = useState(() => {
+    try {
+      const stored = localStorage.getItem('expandedNotebooks');
+      return stored ? JSON.parse(stored) : notebooks.map(n => n.id);
+    } catch {
+      return notebooks.map(n => n.id);
+    }
+  });
   const [editingNotebookId, setEditingNotebookId] = useState(null);
   const [editedNotebookName, setEditedNotebookName] = useState('');
   const [editingSectionId, setEditingSectionId] = useState(null);
   const [editedSectionTitle, setEditedSectionTitle] = useState('');
   const [showIconPicker, setShowIconPicker] = useState(null);
   const [hoveredSectionId, setHoveredSectionId] = useState(null);
+  const knownNotebookIdsRef = useRef(new Set(notebooks.map(n => n.id)));
 
+  // Auto-expand notebooks the user just created, without re-expanding
+  // notebooks the user had deliberately collapsed in a previous session
+  // (those are also "missing" from expandedNotebooks, but aren't new).
   useEffect(() => {
-    if (notebooks.length > 0) {
-      setExpandedNotebooks(notebooks.map(n => n.id));
+    const currentIds = notebooks.map(n => n.id);
+    const newIds = currentIds.filter(id => !knownNotebookIdsRef.current.has(id));
+    if (newIds.length > 0) {
+      setExpandedNotebooks(prev => [...prev, ...newIds]);
     }
-  }, [notebooks.length]);
+    knownNotebookIdsRef.current = new Set(currentIds);
+  }, [notebooks]);
 
   useEffect(() => {
     if (selectedNotebook) {
@@ -286,6 +309,10 @@ function Sidebar({
       );
     }
   }, [selectedNotebook?.id]);
+
+  useEffect(() => {
+    localStorage.setItem('expandedNotebooks', JSON.stringify(expandedNotebooks));
+  }, [expandedNotebooks]);
 
   const toggleNotebook = (notebookId) => {
     setExpandedNotebooks(prev =>
@@ -304,7 +331,7 @@ function Sidebar({
 
   return (
     <div className="sidebar" style={style}>
-      <div className="p-3 border-bottom" style={{ position: 'relative' }}>
+      <div className="sidebar-header p-3 border-bottom" style={{ position: 'relative' }}>
         <h5 className="mb-3">
           <i className="bi bi-journal-code me-2"></i>
           NetCodes
@@ -336,7 +363,7 @@ function Sidebar({
         </div>
       </div>
 
-      <div className="p-2">
+      <div className="sidebar-body p-2">
         {notebooks.length === 0 ? (
           <div className="text-center text-muted py-4">
             <p className="small">No notebooks yet.</p>
@@ -357,6 +384,7 @@ function Sidebar({
                   onNotebookSelect={onNotebookSelect}
                   onUpdateNotebook={onUpdateNotebook}
                   onDeleteNotebook={onDeleteNotebook}
+                  onExportNotebook={onExportNotebook}
                   expandedNotebooks={expandedNotebooks}
                   toggleNotebook={toggleNotebook}
                   editingNotebookId={editingNotebookId}
@@ -380,8 +408,10 @@ function Sidebar({
                       display: 'flex',
                       gap: '2px',
                       opacity: hoveredSectionId === section.id ? 1 : 0,
-                      transition: 'opacity 0.2s',
-                      minWidth: '48px',
+                      width: hoveredSectionId === section.id ? '48px' : '0px',
+                      overflow: 'hidden',
+                      transition: 'opacity 0.2s, width 0.2s',
+                      flexShrink: 0,
                     }}>
                       <button
                         className="btn btn-sm btn-link text-secondary p-0"
@@ -490,6 +520,14 @@ function Sidebar({
                         <i className="bi bi-pencil"></i>
                       </button>
                     )}
+                    <button
+                      className="btn btn-sm btn-link text-secondary p-0"
+                      onClick={(e) => { e.stopPropagation(); onExportSection(section); }}
+                      title="Exporter (.docx / .md)"
+                      style={{ fontSize: '0.75rem' }}
+                    >
+                      <i className="bi bi-file-earmark-arrow-down"></i>
+                    </button>
                     <button
                       className="btn btn-sm btn-link text-secondary p-0"
                       onClick={(e) => {

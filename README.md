@@ -1,50 +1,77 @@
-# NetCodes - Code Snippet Manager
+# NetCodes — Code Snippet Manager
 
-A powerful cross-platform desktop application for developers to store, organize, and manage code snippets and documentation. Built with Electron, React, SQLite, and Monaco Editor.
+A cross-platform desktop application for developers to store, organize, and manage code snippets and documentation. Built with Electron, React, SQLite, and Monaco Editor.
 
 ## Features
 
-- **Organized Structure**: Organize your code snippets in Notebooks → Sections → Pages → Blocks
-- **Multiple Block Types**:
-  - Text blocks with Markdown rendering
-  - Code blocks with syntax highlighting (powered by Monaco Editor)
-  - Support for 20+ programming languages
-- **Offline First**: All data stored locally in SQLite database
-- **Favorites**: Mark important pages as favorites for quick access
-- **Rich Code Editor**: Monaco Editor integration with syntax highlighting and code completion
-- **Cross-Platform**: Works on Windows, macOS, and Linux
+### Organization
+- **Hierarchical structure**: Notebooks → Sections → Pages → Blocks
+- **Drag & drop** notebooks in the sidebar
+- **Reorder** sections, pages and blocks (up/down buttons)
+- **Move** a page to another section, or a section to another notebook (MoveModal)
+- **Custom emoji icon** for each notebook
+
+### Editing
+- **Text blocks** with Markdown rendering (headings, bold, lists, inline code...)
+- **Code blocks** with syntax highlighting via Monaco Editor (20+ languages)
+- **Language saved** per code block
+- **Favorites**: mark important pages for quick access
+
+### Search
+- **Search modal** (Ctrl+K / Cmd+K) with results grouped by notebooks, sections and pages
+- **Full-text search** across page titles, block titles and block content
+- **Auto-select**: clicking a result automatically expands and selects the notebook, section and page
+
+### Export
+- **Word export (.docx)** from a page, a section or an entire notebook
+- Markdown converted to rich text (headings, bold, italic, lists)
+- Code blocks rendered in monospace font with grey background
+
+### Data
+- **Local SQLite storage**, fully offline
+- **Configurable database path** via app settings
 
 ## Tech Stack
 
-- **Electron** - Desktop application framework
-- **React** - UI library
-- **Vite** - Build tool and dev server
-- **SQLite (better-sqlite3)** - Local database
-- **Monaco Editor** - Code editor (same as VS Code)
-- **Bootstrap 5** - UI styling
-- **Marked** - Markdown rendering
+- **Electron 40** — Desktop application framework
+- **React** — UI library
+- **Vite** — Build tool and dev server
+- **SQLite (better-sqlite3)** — Local database
+- **Monaco Editor** — Code editor (same as VS Code)
+- **Bootstrap 5** — UI styling
+- **Marked** — Markdown rendering
+- **docx** — Word document generation
+- **react-dnd** — Drag & drop
 
 ## Project Structure
 
 ```
 netcodes/
 ├── electron/
-│   ├── main.js           # Electron main process
-│   ├── preload.js        # Preload script for IPC
-│   ├── database.js       # Database operations
+│   ├── main.js           # Electron main process + IPC handlers
+│   ├── preload.cjs       # Preload script (API bridge renderer ↔ main)
+│   ├── database.js       # All SQLite operations
+│   ├── export.js         # Word (.docx) generation
+│   ├── settings.js       # Database path management
 │   └── schema.sql        # Database schema
 ├── src/
-│   ├── components/       # React components
-│   │   ├── Sidebar.jsx
-│   │   ├── PagesList.jsx
-│   │   ├── EditorPanel.jsx
-│   │   ├── CodeBlock.jsx
-│   │   └── TextBlock.jsx
+│   ├── components/
+│   │   ├── Sidebar.jsx         # Notebooks and sections
+│   │   ├── PagesList.jsx       # Pages list for a section
+│   │   ├── EditorPanel.jsx     # Block editor
+│   │   ├── CodeBlock.jsx       # Code block (Monaco)
+│   │   ├── TextBlock.jsx       # Text block (Markdown)
+│   │   ├── SearchModal.jsx     # Search modal
+│   │   ├── MoveModal.jsx       # Move modal
+│   │   └── ExportModal.jsx     # Word export modal
 │   ├── styles/
 │   │   └── main.css
 │   ├── App.jsx
 │   └── index.jsx
-├── index.html
+├── tests/
+│   ├── helpers/
+│   │   └── db.js               # Helper: in-memory SQLite DB
+│   └── database.test.js        # Unit tests (55 tests)
 ├── vite.config.js
 ├── package.json
 └── README.md
@@ -54,8 +81,8 @@ netcodes/
 
 ### Prerequisites
 
-- Node.js (v18 or higher)
-- npm or yarn
+- Node.js v20 or higher
+- npm
 
 ### Setup Steps
 
@@ -69,111 +96,93 @@ netcodes/
    npm install
    ```
 
-   **Note**: On first install, the postinstall script will automatically rebuild `better-sqlite3` for Electron using `electron-builder install-app-deps`.
-
-3. **Run the application in development mode**:
+3. **Run in development mode**:
    ```bash
    npm run electron:dev
    ```
 
-   This will:
-   - Start the Vite dev server on http://localhost:5173
-   - Launch the Electron application
-   - Enable hot module replacement for quick development
-
-### Troubleshooting Installation
-
-If you encounter issues with `better-sqlite3` on Windows, you may need to install build tools:
-
-```bash
-npm install --global windows-build-tools
-```
-
-Or install Visual Studio Build Tools manually from:
-https://visualstudio.microsoft.com/downloads/
-
-Then rebuild the native module:
-```bash
-npx @electron/rebuild
-```
-
 ## Usage
-
-### First Launch
-
-When you first launch NetCodes, you'll see sample data including:
-- 2 notebooks (My First Notebook, JavaScript Projects)
-- Several sections and pages
-- Example code snippets and text blocks
 
 ### Creating Content
 
-1. **Create a Notebook**:
-   - Click the "Notebook" button in the sidebar
-   - Enter a name for your notebook
+| Action | How |
+|---|---|
+| New notebook | Click **Notebook** in the sidebar |
+| New section | Click **Section** in the sidebar |
+| New page | Click **+** in the Pages panel |
+| Text block | Click **Text** in the editor toolbar |
+| Code block | Click **Code** in the editor toolbar |
 
-2. **Create a Section**:
-   - Select a notebook
-   - Click the "Section" button
-   - Enter a section title
+### Organizing
 
-3. **Create a Page**:
-   - Select a section
-   - Click the "+" button in the Pages panel
-   - Enter a page title
+- **Reorder**: use ↑↓ buttons on sections, pages and blocks
+- **Drag & drop**: drag notebooks in the sidebar
+- **Move**: click the `→□` icon on a page (pick a section) or a section (pick a notebook)
+- **Change icon**: click a notebook's emoji to open the icon picker
 
-4. **Add Blocks to a Page**:
-   - Select a page
-   - Click "Text" to add a text block with Markdown support
-   - Click "Code" to add a code block with syntax highlighting
+### Searching
 
-### Editing Content
+- **Ctrl+K** (Windows/Linux) or **Cmd+K** (macOS) to open the search modal
+- Results are grouped into **Notebooks**, **Sections** and **Pages**
+- Clicking a result automatically selects and expands the full tree path
 
-- **Text Blocks**: Click the edit (pencil) icon, modify the content, then click the checkmark to save
-- **Code Blocks**: Click the edit icon, modify the code, change language if needed, then save
-- **Copy Code**: Click the clipboard icon on code blocks to copy to clipboard
-- **Delete Blocks**: Click the trash icon to delete a block
+### Exporting to Word
 
-### Managing Pages
+- **Current page**: `📄W` button in the editor toolbar
+- **Specific page**: `📄W` button on a page in the list
+- **Section**: `📄W` button on a section in the sidebar
+- **Notebook**: `📄W` button on a notebook in the sidebar
 
-- **Favorite a Page**: Click the star icon on any page
-- **Delete a Page**: Click the trash icon on a page
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| Ctrl+K / Cmd+K | Open search |
+| Escape | Close active modal |
+| Ctrl+S / Cmd+S | Save (in Monaco Editor) |
+| Ctrl+F / Cmd+F | Find (in Monaco Editor) |
+| Ctrl+H / Cmd+H | Find and Replace (in Monaco Editor) |
+| Alt+↑/↓ | Move line up/down (in Monaco Editor) |
+| Shift+Alt+↑/↓ | Copy line up/down (in Monaco Editor) |
 
 ## Database
 
 The SQLite database is stored in your system's application data folder:
-- **Windows**: `%APPDATA%\netcodes\netcodes.sqlite`
-- **macOS**: `~/Library/Application Support/netcodes/netcodes.sqlite`
-- **Linux**: `~/.config/netcodes/netcodes.sqlite`
 
-### Database Schema
+| OS | Path |
+|---|---|
+| Windows | `%APPDATA%\NetCodes\netcodes.sqlite` |
+| macOS | `~/Library/Application Support/NetCodes/netcodes.sqlite` |
+| Linux | `~/.config/NetCodes/netcodes.sqlite` |
 
-- **notebooks**: Store notebook information
-- **sections**: Store sections within notebooks
-- **pages**: Store individual pages within sections
-- **blocks**: Store content blocks (text/code) within pages
-- **tags**: Store tags for categorization
-- **page_tags**: Junction table for many-to-many relationship
+The path can be changed via **Settings** in the application.
 
-## Development
-
-### Available Scripts
-
-- `npm run dev` - Start Vite dev server only
-- `npm run electron:dev` - Start both Vite and Electron in development mode
-- `npm run build` - Build the React app for production
-- `npm run electron:build` - Build Electron application for distribution
-
-### Building for Production
-
-To create distributable packages:
+## Tests
 
 ```bash
-npm run build
-npm run electron:build
+npm test
 ```
 
-This will create platform-specific installers in the `dist-electron` folder.
+55 unit tests covering:
+- `notebookOps` — CRUD, reorder, cascade delete
+- `sectionOps` — CRUD, reorder, move between notebooks
+- `pageOps` — CRUD, reorder, move between sections, favorites
+- `blockOps` — CRUD, reorder
+- `searchOps` — search by notebook/section/page/block content/block title
+- `export` — docx generation for page, section, notebook (including empty cases)
+
+## Available Scripts
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Start Vite dev server only |
+| `npm run electron:dev` | Start Vite + Electron in development |
+| `npm run build` | Build React app for production |
+| `npm run electron:build` | Build Electron app for distribution |
+| `npm run rebuild:electron` | Rebuild `better-sqlite3` for Electron (before packaging) |
+| `npm run rebuild:node` | Rebuild `better-sqlite3` for Node.js (before running tests) |
+| `npm test` | Run unit tests |
+| `npm run test:watch` | Run tests in watch mode |
 
 ## Supported Languages
 
@@ -187,46 +196,107 @@ The code editor supports syntax highlighting for:
 - SQL, Markdown, Shell
 - Plain Text
 
-## Keyboard Shortcuts (in Monaco Editor)
-
-- `Ctrl+S` / `Cmd+S` - Save (when editing)
-- `Ctrl+F` / `Cmd+F` - Find
-- `Ctrl+H` / `Cmd+H` - Find and Replace
-- `Ctrl+D` / `Cmd+D` - Add selection to next find match
-- `Alt+Up/Down` - Move line up/down
-- `Shift+Alt+Up/Down` - Copy line up/down
-
-## Future Enhancements
-
-- [ ] Search functionality (SQLite FTS5)
-- [ ] Dark mode toggle
-- [ ] Drag-and-drop reordering
-- [ ] Export/Import database
-- [ ] Tag management UI
-- [ ] Attachment support
-- [ ] Code snippet templates
-- [ ] Keyboard shortcuts
-- [ ] Full-text search across all content
-
 ## Troubleshooting
 
-### Database Issues
-If you encounter database issues, delete the database file (see Database section for location) and restart the app. Sample data will be recreated.
+### Build fails on macOS (`better-sqlite3` prebuild not found)
 
-### Development Server Not Starting
-Make sure port 5173 is not in use by another application.
+This happens when the Electron version in use is not supported by the installed `better-sqlite3` version, or when a previous build left a `build/` directory owned by `root` inside `node_modules/better-sqlite3`.
 
-### Electron Not Opening
-Check the console for errors. Make sure all dependencies are installed correctly with `npm install`.
+**Symptoms**
 
-## License
+```
+prebuild-install warn install No prebuilt binaries found (target=X.X.X runtime=electron ...)
+gyp ERR! stack Error: EACCES: permission denied, unlink 'build/config.gypi'
+```
 
-MIT
+**Fix**
+
+1. Fix permissions on the native build directory:
+   ```bash
+   sudo chown -R $(whoami) node_modules/better-sqlite3/build/
+   ```
+
+2. Reinstall and rebuild:
+   ```bash
+   npm install
+   npm run electron:build
+   ```
+
+> `better-sqlite3@12` requires **Electron 29 or higher**. The project ships with Electron 40 which is fully compatible.
+
+---
+
+### `better-sqlite3` not found (Windows)
+
+`better-sqlite3` is a native module that must be compiled for the exact Electron version. On Windows, this requires the **Visual Studio C++ Build Tools**.
+
+**Step 1 — Install Build Tools**
+
+Open PowerShell as Administrator and run:
+
+```powershell
+winget install Microsoft.VisualStudio.2022.BuildTools --override "--quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+```
+
+Or open **Visual Studio Installer** → **Modify** → check **Desktop development with C++** → **Modify**.
+
+**Step 2 — Rebuild the native module**
+
+After installation, restart your terminal and run:
+
+```powershell
+npx electron-rebuild -f -w better-sqlite3
+```
+
+**Step 3 — Run or build**
+
+```powershell
+npm run electron        # dev mode
+npm run electron:build  # production build
+```
+
+> Note: `electron:build` automatically runs `rebuild:electron` before packaging. After a build, run `npm run rebuild:node` to restore `better-sqlite3` for Node.js if you need to run tests.
+
+### Build fails with `Access is denied` (Windows)
+
+A previous Electron process is locking build output files. Kill all Electron processes and delete the output folder before retrying:
+
+```powershell
+Get-Process -Name "electron","netcodes" -ErrorAction SilentlyContinue | Stop-Process -Force
+Remove-Item dist-electron -Recurse -Force
+npm run electron:build
+```
+
+### Database issues
+
+If you encounter database corruption or unexpected errors, the app runs `REINDEX` automatically on startup to repair indexes. If issues persist, delete the database file (see Database section for the path) and restart — the app will create a fresh database.
+
+### Development server not starting
+
+Make sure port 5200 is not in use by another application.
+
+### Electron not opening
+
+Check the terminal for errors and make sure all dependencies are installed with `npm install`.
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/my-feature`)
+3. Commit your changes (`git commit -m 'Add my feature'`)
+4. Push to the branch (`git push origin feature/my-feature`)
+5. Open a Pull Request
+
+## License
+
+MIT
+
 ## Author
 
-Built with ❤️ for developers who love to organize their code snippets.
+Parfait BENE — [parfaitbene.com](https://parfaitbene.com)
+
+---
+
+> This project was vibecoded with [Claude Code](https://claude.ai/code)

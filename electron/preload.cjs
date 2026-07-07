@@ -68,4 +68,12 @@ contextBridge.exposeInMainWorld('api', {
   dialog: {
     prompt: (message, defaultValue) => ipcRenderer.invoke('dialog:prompt', message, defaultValue),
   },
+
+  // Export operations
+  export: {
+    page: (pageId, format, blockLayout) => ipcRenderer.invoke('export:page', pageId, format, blockLayout),
+    section: (sectionId, format, blockLayout) => ipcRenderer.invoke('export:section', sectionId, format, blockLayout),
+    notebook: (notebookId, format, blockLayout) => ipcRenderer.invoke('export:notebook', notebookId, format, blockLayout),
+    block: (blockId, format) => ipcRenderer.invoke('export:block', blockId, format),
+  },
 });

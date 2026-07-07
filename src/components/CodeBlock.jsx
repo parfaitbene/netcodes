@@ -1,5 +1,8 @@
+// src/components/CodeBlock.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
+import { useFileDrop, detectLanguage } from '../hooks/useFileDrop';
+import FileDropModal from './FileDropModal';
 
 const LANGUAGES = [
   { value: 'javascript', label: 'JavaScript' },
@@ -27,14 +30,14 @@ const LANGUAGES = [
   { value: 'plaintext', label: 'Plain Text' },
 ];
 
-function CodeBlock({ block, onUpdate, onDelete }) {
-  // const [isEditing, setIsEditing] = useState(false);
+function CodeBlock({ block, onUpdate, onDelete, onExport }) {
   const [language, setLanguage] = useState(block.language || 'javascript');
   const [code, setCode] = useState(block.content || '');
   const [editedTitle, setEditedTitle] = useState(block.title || '');
+  const [dropPending, setDropPending] = useState(null);
   const editorRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-  // Synchronize local state with block prop changes
   useEffect(() => {
     setCode(block.content || '');
     setLanguage(block.language || 'javascript');
@@ -47,7 +50,6 @@ function CodeBlock({ block, onUpdate, onDelete }) {
 
   const handleSave = () => {
     onUpdate(block.id, code, language, editedTitle);
-    // setIsEditing(false);
   };
 
   const handleTitleBlur = () => {
@@ -72,8 +74,41 @@ function CodeBlock({ block, onUpdate, onDelete }) {
     onUpdate(block.id, code, newLanguage, editedTitle);
   };
 
+  const onFileContent = (newContent, filename) => {
+    const detectedLang = detectLanguage(filename);
+    if (code === '') {
+      setCode(newContent);
+      setLanguage(detectedLang);
+      onUpdate(block.id, newContent, detectedLang, editedTitle);
+    } else {
+      setDropPending({ content: newContent, filename, language: detectedLang });
+    }
+  };
+
+  const { dragProps, isDragOver, handleFileInput } = useFileDrop(onFileContent);
+
+  const handleReplace = () => {
+    const { content: newContent, language: detectedLang } = dropPending;
+    setCode(newContent);
+    setLanguage(detectedLang);
+    onUpdate(block.id, newContent, detectedLang, editedTitle);
+    setDropPending(null);
+  };
+
+  const handleAppend = () => {
+    const { content: newContent, language: detectedLang } = dropPending;
+    const merged = code + '\n' + newContent;
+    setCode(merged);
+    setLanguage(detectedLang);
+    onUpdate(block.id, merged, detectedLang, editedTitle);
+    setDropPending(null);
+  };
+
   return (
-    <div className="block-container">
+    <div
+      className={`block-container${isDragOver ? ' drag-over' : ''}`}
+      {...dragProps}
+    >
       <div className="block-header">
         <div className="d-flex align-items-center gap-2 flex-grow-1">
           <i className="reorder bi bi-grip-vertical"></i>
@@ -90,7 +125,6 @@ function CodeBlock({ block, onUpdate, onDelete }) {
             style={{ width: 'auto' }}
             value={language}
             onChange={handleLanguageChange}
-            // disabled={!isEditing}
           >
             {LANGUAGES.map(lang => (
               <option key={lang.value} value={lang.value}>
@@ -100,20 +134,40 @@ function CodeBlock({ block, onUpdate, onDelete }) {
           </select>
         </div>
         <div className="block-actions">
-            <button
-                className="btn btn-sm btn-outline-secondary"
-                onClick={handleCopy}
-                title="Copy to clipboard"
-              >
-                <i className="bi bi-clipboard"></i>
-             </button>
-             <button
-                className="btn btn-sm btn-outline-danger"
-                onClick={() => onDelete(block.id)}
-                title="Delete"
-              >
-                <i className="bi bi-trash"></i>
-              </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={(e) => handleFileInput(e.target.files[0])}
+          />
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            onClick={() => fileInputRef.current.click()}
+            title="Importer un fichier"
+          >
+            <i className="bi bi-upload"></i>
+          </button>
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            onClick={handleCopy}
+            title="Copy to clipboard"
+          >
+            <i className="bi bi-clipboard"></i>
+          </button>
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            onClick={onExport}
+            title="Exporter (.docx / .md)"
+          >
+            <i className="bi bi-file-earmark-arrow-down"></i>
+          </button>
+          <button
+            className="btn btn-sm btn-outline-danger"
+            onClick={() => onDelete(block.id)}
+            title="Delete"
+          >
+            <i className="bi bi-trash"></i>
+          </button>
         </div>
       </div>
       <div className="code-block-wrapper" onBlur={handleSave}>
@@ -125,7 +179,6 @@ function CodeBlock({ block, onUpdate, onDelete }) {
           onMount={handleEditorDidMount}
           theme="vs-light"
           options={{
-            // readOnly: !isEditing,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
             fontSize: 14,
@@ -138,6 +191,13 @@ function CodeBlock({ block, onUpdate, onDelete }) {
           }}
         />
       </div>
+      <FileDropModal
+        show={dropPending !== null}
+        filename={dropPending?.filename || ''}
+        onReplace={handleReplace}
+        onAppend={handleAppend}
+        onCancel={() => setDropPending(null)}
+      />
     </div>
   );
 }

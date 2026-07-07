@@ -6,6 +6,7 @@ import PagesList from './components/PagesList';
 import EditorPanel from './components/EditorPanel';
 import SearchModal from './components/SearchModal';
 import MoveModal from './components/MoveModal';
+import ExportModal from './components/ExportModal';
 
 function App() {
   // State for application data
@@ -19,6 +20,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [showSearch, setShowSearch] = useState(false);
   const [moveModal, setMoveModal] = useState(null); // { mode: 'page'|'section', item }
+  const [exportModal, setExportModal] = useState(null); // { mode: 'page'|'section'|'notebook', item }
 
   // State for panel resizing
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -96,8 +98,20 @@ function App() {
       setSections(sectionsData);
       setPages(pagesData);
 
-      // Auto-select first notebook and section if available
-      if (notebooksData.length > 0) {
+      // Try to restore the last active page from a previous session
+      const lastPageId = localStorage.getItem('lastActivePageId');
+      const lastPage = lastPageId ? pagesData.find(p => String(p.id) === lastPageId) : null;
+      const lastSection = lastPage ? sectionsData.find(s => s.id === lastPage.section_id) : null;
+      const lastNotebook = lastSection ? notebooksData.find(n => n.id === lastSection.notebook_id) : null;
+
+      if (lastPage && lastSection && lastNotebook) {
+        setSelectedNotebook(lastNotebook);
+        setSelectedSection(lastSection);
+        setSelectedPage(lastPage);
+        const blocksData = await window.api.blocks.getByPage(lastPage.id);
+        setBlocks(blocksData);
+      } else if (notebooksData.length > 0) {
+        // Auto-select first notebook and section if available
         setSelectedNotebook(notebooksData[0]);
         const firstSection = sectionsData.find(s => s.notebook_id === notebooksData[0].id);
         if (firstSection) {
@@ -126,6 +140,16 @@ function App() {
     }
     loadData();
   }, []);
+
+  useEffect(() => {
+    // Only persist when a page is actually selected — selectedPage is
+    // transiently null on mount (while loadData is still fetching) and
+    // when switching sections/notebooks, and we don't want those moments
+    // to erase the remembered last-active page.
+    if (selectedPage) {
+      localStorage.setItem('lastActivePageId', String(selectedPage.id));
+    }
+  }, [selectedPage]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -542,6 +566,8 @@ function App() {
           onReorderNotebook={handleReorderNotebook}
           onReorderSection={handleReorderSection}
           onMoveSection={(section) => setMoveModal({ mode: 'section', item: section })}
+          onExportNotebook={(notebook) => setExportModal({ mode: 'notebook', item: notebook })}
+          onExportSection={(section) => setExportModal({ mode: 'section', item: section })}
           onOpenSearch={() => setShowSearch(true)}
           style={{ width: sidebarWidth }}
         />
@@ -555,6 +581,7 @@ function App() {
           onToggleFavorite={handleToggleFavorite}
           onReorderPage={handleReorderPage}
           onMovePage={(page) => setMoveModal({ mode: 'page', item: page })}
+          onExportPage={(page) => setExportModal({ mode: 'page', item: page })}
           style={{ width: pagesListWidth }}
         />
         <div className="resizer" onMouseDown={startResizingPagesList}></div>
@@ -566,6 +593,8 @@ function App() {
           onDeleteBlock={handleDeleteBlock}
           onUpdatePageTitle={handleUpdatePageTitle}
           onReorderBlock={handleReorderBlock}
+          onExportPage={selectedPage ? () => setExportModal({ mode: 'page', item: selectedPage }) : null}
+          onExportBlock={(block) => setExportModal({ mode: 'block', item: block })}
           style={{ flexGrow: 1 }}
         />
       </div>
@@ -588,6 +617,16 @@ function App() {
             else handleMoveSection(moveModal.item.id, destId);
           }}
           onClose={() => setMoveModal(null)}
+        />
+      )}
+      {exportModal && (
+        <ExportModal
+          mode={exportModal.mode}
+          item={exportModal.item}
+          notebooks={notebooks}
+          sections={sections}
+          pages={pages}
+          onClose={() => setExportModal(null)}
         />
       )}
     </DndProvider>
