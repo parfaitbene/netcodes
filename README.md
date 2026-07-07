@@ -284,10 +284,11 @@ Check the terminal for errors and make sure all dependencies are installed with 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/my-feature`)
-3. Commit your changes (`git commit -m 'Add my feature'`)
-4. Push to the branch (`git push origin feature/my-feature`)
-5. Open a Pull Request
+2. Use [Conventional Commits](https://www.conventionalcommits.org/)
+3. Create your feature branch (`git checkout -b feature/my-feature`)
+4. Commit your changes (`git commit -m 'Add my feature'`)
+5. Push to the branch (`git push origin feature/my-feature`)
+6. Open a Pull Request
 
 ## License
 
