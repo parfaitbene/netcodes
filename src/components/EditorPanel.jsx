@@ -6,6 +6,7 @@ import TextBlock from './TextBlock';
 
 const DraggableBlock = ({ block, index, moveBlock, onUpdateBlock, onDeleteBlock, onExportBlock }) => {
   const ref = useRef(null);
+  const dragHandleRef = useRef(null);
   const [{ handlerId }, drop] = useDrop({
     accept: ItemTypes.BLOCK,
     collect(monitor) {
@@ -71,7 +72,8 @@ const DraggableBlock = ({ block, index, moveBlock, onUpdateBlock, onDeleteBlock,
   });
 
   const opacity = isDragging ? 0 : 1;
-  drag(drop(ref));
+  drop(ref);
+  drag(dragHandleRef);
 
   return (
     <div ref={ref} style={{ opacity }} data-handler-id={handlerId}>
@@ -81,6 +83,7 @@ const DraggableBlock = ({ block, index, moveBlock, onUpdateBlock, onDeleteBlock,
           onUpdate={onUpdateBlock}
           onDelete={onDeleteBlock}
           onExport={() => onExportBlock(block)}
+          dragHandleRef={dragHandleRef}
         />
       ) : block.type === 'code' ? (
         <CodeBlock
@@ -88,6 +91,7 @@ const DraggableBlock = ({ block, index, moveBlock, onUpdateBlock, onDeleteBlock,
           onUpdate={onUpdateBlock}
           onDelete={onDeleteBlock}
           onExport={() => onExportBlock(block)}
+          dragHandleRef={dragHandleRef}
         />
       ) : null}
     </div>

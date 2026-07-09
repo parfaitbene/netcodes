@@ -30,7 +30,7 @@ const LANGUAGES = [
   { value: 'plaintext', label: 'Plain Text' },
 ];
 
-function CodeBlock({ block, onUpdate, onDelete, onExport }) {
+function CodeBlock({ block, onUpdate, onDelete, onExport, dragHandleRef }) {
   const [language, setLanguage] = useState(block.language || 'javascript');
   const [code, setCode] = useState(block.content || '');
   const [editedTitle, setEditedTitle] = useState(block.title || '');
@@ -111,7 +111,7 @@ function CodeBlock({ block, onUpdate, onDelete, onExport }) {
     >
       <div className="block-header">
         <div className="d-flex align-items-center gap-2 flex-grow-1">
-          <i className="reorder bi bi-grip-vertical"></i>
+          <i ref={dragHandleRef} className="reorder bi bi-grip-vertical"></i>
           <input
             type="text"
             className="form-control form-control-sm w-100"
