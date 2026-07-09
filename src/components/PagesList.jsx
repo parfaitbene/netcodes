@@ -6,7 +6,9 @@ import DropdownMenu from './DropdownMenu';
 function DraggablePageItem({
   page,
   index,
+  pageCount,
   movePage,
+  onReorderPage,
   selectedPage,
   onPageSelect,
   onDeletePage,
@@ -125,6 +127,31 @@ function DraggablePageItem({
               },
               { separator: true },
               {
+                label: 'Monter',
+                icon: 'bi-arrow-up',
+                disabled: index === 0,
+                onClick: () => onReorderPage(page.id, index - 1),
+              },
+              {
+                label: 'En tête de liste',
+                icon: 'bi-chevron-double-up',
+                disabled: index === 0,
+                onClick: () => onReorderPage(page.id, 0),
+              },
+              {
+                label: 'Descendre',
+                icon: 'bi-arrow-down',
+                disabled: index === pageCount - 1,
+                onClick: () => onReorderPage(page.id, index + 1),
+              },
+              {
+                label: 'En fin de liste',
+                icon: 'bi-chevron-double-down',
+                disabled: index === pageCount - 1,
+                onClick: () => onReorderPage(page.id, pageCount - 1),
+              },
+              { separator: true },
+              {
                 label: 'Supprimer',
                 icon: 'bi-trash',
                 danger: true,
@@ -199,7 +226,9 @@ function PagesList({
               key={page.id}
               page={page}
               index={index}
+              pageCount={visiblePages.length}
               movePage={movePage}
+              onReorderPage={onReorderPage}
               selectedPage={selectedPage}
               onPageSelect={onPageSelect}
               onDeletePage={onDeletePage}

@@ -74,7 +74,9 @@ function IconPickerTrigger({ icon, open, onToggle, onSelect, onClose }) {
 function DraggableNotebookItem({
   notebook,
   index,
+  notebookCount,
   moveNotebook,
+  onReorderNotebook,
   selectedNotebook,
   onNotebookSelect,
   onUpdateNotebook,
@@ -234,6 +236,31 @@ function DraggableNotebookItem({
               },
               { separator: true },
               {
+                label: 'Monter',
+                icon: 'bi-arrow-up',
+                disabled: index === 0,
+                onClick: () => onReorderNotebook(notebook.id, index - 1),
+              },
+              {
+                label: 'En tête de liste',
+                icon: 'bi-chevron-double-up',
+                disabled: index === 0,
+                onClick: () => onReorderNotebook(notebook.id, 0),
+              },
+              {
+                label: 'Descendre',
+                icon: 'bi-arrow-down',
+                disabled: index === notebookCount - 1,
+                onClick: () => onReorderNotebook(notebook.id, index + 1),
+              },
+              {
+                label: 'En fin de liste',
+                icon: 'bi-chevron-double-down',
+                disabled: index === notebookCount - 1,
+                onClick: () => onReorderNotebook(notebook.id, notebookCount - 1),
+              },
+              { separator: true },
+              {
                 label: 'Supprimer',
                 icon: 'bi-trash',
                 danger: true,
@@ -373,7 +400,9 @@ function Sidebar({
                 <DraggableNotebookItem
                   notebook={notebook}
                   index={index}
+                  notebookCount={notebooks.length}
                   moveNotebook={moveNotebook}
+                  onReorderNotebook={onReorderNotebook}
                   selectedNotebook={selectedNotebook}
                   onNotebookSelect={onNotebookSelect}
                   onUpdateNotebook={onUpdateNotebook}
@@ -479,6 +508,31 @@ function Sidebar({
                               label: 'Exporter',
                               icon: 'bi-file-earmark-arrow-down',
                               onClick: () => onExportSection(section),
+                            },
+                            { separator: true },
+                            {
+                              label: 'Monter',
+                              icon: 'bi-arrow-up',
+                              disabled: sectionIndex === 0,
+                              onClick: () => onReorderSection(section.id, sectionIndex - 1),
+                            },
+                            {
+                              label: 'En tête de liste',
+                              icon: 'bi-chevron-double-up',
+                              disabled: sectionIndex === 0,
+                              onClick: () => onReorderSection(section.id, 0),
+                            },
+                            {
+                              label: 'Descendre',
+                              icon: 'bi-arrow-down',
+                              disabled: sectionIndex === notebookSections.length - 1,
+                              onClick: () => onReorderSection(section.id, sectionIndex + 1),
+                            },
+                            {
+                              label: 'En fin de liste',
+                              icon: 'bi-chevron-double-down',
+                              disabled: sectionIndex === notebookSections.length - 1,
+                              onClick: () => onReorderSection(section.id, notebookSections.length - 1),
                             },
                             { separator: true },
                             {

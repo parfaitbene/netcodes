@@ -5,7 +5,7 @@ import CodeBlock from './CodeBlock';
 import TextBlock from './TextBlock';
 import DropdownMenu from './DropdownMenu';
 
-const DraggableBlock = ({ block, index, moveBlock, onUpdateBlock, onDeleteBlock, onExportBlock }) => {
+const DraggableBlock = ({ block, index, blockCount, moveBlock, onReorderBlock, onUpdateBlock, onDeleteBlock, onExportBlock }) => {
   const ref = useRef(null);
   const dragHandleRef = useRef(null);
   const [{ handlerId }, drop] = useDrop({
@@ -81,17 +81,23 @@ const DraggableBlock = ({ block, index, moveBlock, onUpdateBlock, onDeleteBlock,
       {block.type === 'text' ? (
         <TextBlock
           block={block}
+          index={index}
+          blockCount={blockCount}
           onUpdate={onUpdateBlock}
           onDelete={onDeleteBlock}
           onExport={() => onExportBlock(block)}
+          onReorder={onReorderBlock}
           dragHandleRef={dragHandleRef}
         />
       ) : block.type === 'code' ? (
         <CodeBlock
           block={block}
+          index={index}
+          blockCount={blockCount}
           onUpdate={onUpdateBlock}
           onDelete={onDeleteBlock}
           onExport={() => onExportBlock(block)}
+          onReorder={onReorderBlock}
           dragHandleRef={dragHandleRef}
         />
       ) : null}
@@ -233,8 +239,10 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
             <DraggableBlock
               key={block.id}
               index={index}
+              blockCount={localBlocks.length}
               block={block}
               moveBlock={moveBlock}
+              onReorderBlock={onReorderBlock}
               onUpdateBlock={onUpdateBlock}
               onDeleteBlock={onDeleteBlock}
               onExportBlock={onExportBlock}

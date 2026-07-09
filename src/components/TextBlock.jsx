@@ -6,7 +6,7 @@ import { useFileDrop } from '../hooks/useFileDrop';
 import FileDropModal from './FileDropModal';
 import DropdownMenu from './DropdownMenu';
 
-function TextBlock({ block, onUpdate, onDelete, onExport, dragHandleRef }) {
+function TextBlock({ block, index, blockCount, onUpdate, onDelete, onExport, onReorder, dragHandleRef }) {
   const [isEditing, setIsEditing] = useState(false);
   const [content, setContent] = useState(block.content || '');
   const [editedTitle, setEditedTitle] = useState(block.title || '');
@@ -139,6 +139,31 @@ function TextBlock({ block, onUpdate, onDelete, onExport, dragHandleRef }) {
                   label: 'Exporter',
                   icon: 'bi-file-earmark-arrow-down',
                   onClick: onExport,
+                },
+                { separator: true },
+                {
+                  label: 'Monter',
+                  icon: 'bi-arrow-up',
+                  disabled: index === 0,
+                  onClick: () => onReorder(block.id, index),
+                },
+                {
+                  label: 'En tête de liste',
+                  icon: 'bi-chevron-double-up',
+                  disabled: index === 0,
+                  onClick: () => onReorder(block.id, 1),
+                },
+                {
+                  label: 'Descendre',
+                  icon: 'bi-arrow-down',
+                  disabled: index === blockCount - 1,
+                  onClick: () => onReorder(block.id, index + 2),
+                },
+                {
+                  label: 'En fin de liste',
+                  icon: 'bi-chevron-double-down',
+                  disabled: index === blockCount - 1,
+                  onClick: () => onReorder(block.id, blockCount),
                 },
                 { separator: true },
                 {

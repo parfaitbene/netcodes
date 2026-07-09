@@ -31,7 +31,7 @@ const LANGUAGES = [
   { value: 'plaintext', label: 'Plain Text' },
 ];
 
-function CodeBlock({ block, onUpdate, onDelete, onExport, dragHandleRef }) {
+function CodeBlock({ block, index, blockCount, onUpdate, onDelete, onExport, onReorder, dragHandleRef }) {
   const [language, setLanguage] = useState(block.language || 'javascript');
   const [code, setCode] = useState(block.content || '');
   const [editedTitle, setEditedTitle] = useState(block.title || '');
@@ -157,6 +157,31 @@ function CodeBlock({ block, onUpdate, onDelete, onExport, dragHandleRef }) {
                 label: 'Exporter',
                 icon: 'bi-file-earmark-arrow-down',
                 onClick: onExport,
+              },
+              { separator: true },
+              {
+                label: 'Monter',
+                icon: 'bi-arrow-up',
+                disabled: index === 0,
+                onClick: () => onReorder(block.id, index),
+              },
+              {
+                label: 'En tête de liste',
+                icon: 'bi-chevron-double-up',
+                disabled: index === 0,
+                onClick: () => onReorder(block.id, 1),
+              },
+              {
+                label: 'Descendre',
+                icon: 'bi-arrow-down',
+                disabled: index === blockCount - 1,
+                onClick: () => onReorder(block.id, index + 2),
+              },
+              {
+                label: 'En fin de liste',
+                icon: 'bi-chevron-double-down',
+                disabled: index === blockCount - 1,
+                onClick: () => onReorder(block.id, blockCount),
               },
               { separator: true },
               {

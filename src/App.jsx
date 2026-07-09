@@ -320,21 +320,23 @@ function App() {
     try {
       const currentPage = pages.find(p => p.id === pageId);
       if (!currentPage) return;
-      
+
       const sectionPages = pages
-        .filter(p => p.section_id === currentPage.section_id && !p.favorite)
+        .filter(p => p.section_id === currentPage.section_id)
         .sort((a, b) => a.position - b.position);
-      
+
       const currentIndex = sectionPages.findIndex(p => p.id === pageId);
-      const otherPage = sectionPages[newPosition];
-      
-      if (otherPage && currentIndex !== newPosition) {
-        // Swap positions
-        const tempPos = currentPage.position;
-        await window.api.pages.reorder(currentPage.id, otherPage.position);
-        await window.api.pages.reorder(otherPage.id, tempPos);
+
+      if (currentIndex !== newPosition && newPosition >= 0 && newPosition < sectionPages.length) {
+        const reorderedList = [...sectionPages];
+        const [movedItem] = reorderedList.splice(currentIndex, 1);
+        reorderedList.splice(newPosition, 0, movedItem);
+
+        for (let i = 0; i < reorderedList.length; i++) {
+          await window.api.pages.reorder(reorderedList[i].id, i + 1);
+        }
       }
-      
+
       const updatedPages = await window.api.pages.getAll();
       setPages(updatedPages);
     } catch (error) {
