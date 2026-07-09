@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
  */
 function DropdownMenu({ items, align = 'right' }) {
   const [open, setOpen] = useState(false);
-  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const [coords, setCoords] = useState({ top: null, bottom: null, left: 0 });
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
 
@@ -19,8 +19,16 @@ function DropdownMenu({ items, align = 'right' }) {
     if (!open) return;
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
-    setCoords({ top: rect.bottom + 4, left: rect.right });
-  }, [open]);
+    const visibleItems = items.filter(item => !item.separator).length;
+    const separators = items.filter(item => item.separator).length;
+    const estimatedHeight = visibleItems * 32 + separators * 13 + 8;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow < estimatedHeight && rect.top > estimatedHeight) {
+      setCoords({ top: null, bottom: window.innerHeight - rect.top + 4, left: rect.right });
+    } else {
+      setCoords({ top: rect.bottom + 4, bottom: null, left: rect.right });
+    }
+  }, [open, items]);
 
   useEffect(() => {
     if (!open) return;
@@ -59,7 +67,7 @@ function DropdownMenu({ items, align = 'right' }) {
           onMouseDown={(e) => e.stopPropagation()}
           style={{
             position: 'fixed',
-            top: coords.top,
+            ...(coords.top !== null ? { top: coords.top } : { bottom: coords.bottom }),
             ...(align === 'right'
               ? { right: `calc(100vw - ${coords.left}px)` }
               : { left: coords.left - 160 }),
