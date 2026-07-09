@@ -91,6 +91,18 @@ function setupApplicationMenu() {
   const currentPath = getDbPath() || getDefaultDbPath();
   const template = [
     {
+      label: 'Édition',
+      submenu: [
+        { role: 'undo', label: 'Annuler' },
+        { role: 'redo', label: 'Rétablir' },
+        { type: 'separator' },
+        { role: 'cut', label: 'Couper' },
+        { role: 'copy', label: 'Copier' },
+        { role: 'paste', label: 'Coller' },
+        { role: 'selectAll', label: 'Tout sélectionner' },
+      ],
+    },
+    {
       label: 'Paramètres',
       submenu: [
         {
