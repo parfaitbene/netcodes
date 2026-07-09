@@ -98,11 +98,12 @@ body {
   align-items: center;
   gap: 8px;
   font-size: 0.9rem;
-  transition: background-color 0.2s;
+  transition: background-color 0.25s, transform 0.25s;
 }
 
 .section-item:hover {
   background-color: #e9ecef;
+  transform: translateX(15px);
 }
 
 .section-item.active {

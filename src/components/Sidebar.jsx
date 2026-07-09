@@ -281,6 +281,7 @@ function Sidebar({
   const [editingSectionId, setEditingSectionId] = useState(null);
   const [editedSectionTitle, setEditedSectionTitle] = useState('');
   const [showIconPicker, setShowIconPicker] = useState(null);
+  const [hoveredSectionId, setHoveredSectionId] = useState(null);
   const knownNotebookIdsRef = useRef(new Set(notebooks.map(n => n.id)));
 
   // Auto-expand notebooks the user just created, without re-expanding
@@ -393,6 +394,8 @@ function Sidebar({
                     key={section.id}
                     className={`section-item ${selectedSection?.id === section.id ? 'active' : ''}`}
                     onClick={() => onSectionSelect(section)}
+                    onMouseEnter={() => setHoveredSectionId(section.id)}
+                    onMouseLeave={() => setHoveredSectionId(null)}
                     style={{ justifyContent: 'space-between' }}
                   >
                     <span
@@ -424,62 +427,70 @@ function Sidebar({
                         section.title
                       )}
                     </span>
-                    {editingSectionId === section.id ? (
-                      <div className="d-flex gap-1">
-                        <button
-                          className="btn btn-sm btn-success p-0 px-1"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onUpdateSection(section.id, editedSectionTitle, section.color);
-                            setEditingSectionId(null);
-                          }}
-                          title="Enregistrer"
-                        >
-                          <i className="bi bi-check-lg"></i>
-                        </button>
-                        <button
-                          className="btn btn-sm btn-secondary p-0 px-1"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditedSectionTitle(section.title);
-                            setEditingSectionId(null);
-                          }}
-                          title="Annuler"
-                        >
-                          <i className="bi bi-x-lg"></i>
-                        </button>
-                      </div>
-                    ) : (
-                      <DropdownMenu
-                        items={[
-                          {
-                            label: 'Renommer',
-                            icon: 'bi-pencil',
-                            onClick: () => {
+                    <div style={{
+                      overflow: 'hidden',
+                      flexShrink: 0,
+                      opacity: hoveredSectionId === section.id || editingSectionId === section.id ? 1 : 0,
+                      width: hoveredSectionId === section.id || editingSectionId === section.id ? '48px' : '0px',
+                      transition: 'opacity 0.25s, width 0.25s',
+                    }}>
+                      {editingSectionId === section.id ? (
+                        <div className="d-flex gap-1">
+                          <button
+                            className="btn btn-sm btn-success p-0 px-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateSection(section.id, editedSectionTitle, section.color);
+                              setEditingSectionId(null);
+                            }}
+                            title="Enregistrer"
+                          >
+                            <i className="bi bi-check-lg"></i>
+                          </button>
+                          <button
+                            className="btn btn-sm btn-secondary p-0 px-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setEditedSectionTitle(section.title);
-                              setEditingSectionId(section.id);
+                              setEditingSectionId(null);
+                            }}
+                            title="Annuler"
+                          >
+                            <i className="bi bi-x-lg"></i>
+                          </button>
+                        </div>
+                      ) : (
+                        <DropdownMenu
+                          items={[
+                            {
+                              label: 'Renommer',
+                              icon: 'bi-pencil',
+                              onClick: () => {
+                                setEditedSectionTitle(section.title);
+                                setEditingSectionId(section.id);
+                              },
                             },
-                          },
-                          {
-                            label: 'Déplacer',
-                            icon: 'bi-arrow-right-square',
-                            onClick: () => onMoveSection(section),
-                          },
-                          {
-                            label: 'Exporter',
-                            icon: 'bi-file-earmark-arrow-down',
-                            onClick: () => onExportSection(section),
-                          },
-                          { separator: true },
-                          {
-                            label: 'Supprimer',
-                            icon: 'bi-trash',
-                            danger: true,
-                            onClick: () => onDeleteSection(section.id),
-                          },
-                        ]}
-                      />
-                    )}
+                            {
+                              label: 'Déplacer',
+                              icon: 'bi-arrow-right-square',
+                              onClick: () => onMoveSection(section),
+                            },
+                            {
+                              label: 'Exporter',
+                              icon: 'bi-file-earmark-arrow-down',
+                              onClick: () => onExportSection(section),
+                            },
+                            { separator: true },
+                            {
+                              label: 'Supprimer',
+                              icon: 'bi-trash',
+                              danger: true,
+                              onClick: () => onDeleteSection(section.id),
+                            },
+                          ]}
+                        />
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
