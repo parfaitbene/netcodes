@@ -121,12 +121,12 @@ export const sectionOps = {
 // Page operations
 export const pageOps = {
   getAll: () => {
-    const stmt = db.prepare('SELECT * FROM pages ORDER BY section_id, favorite, position');
+    const stmt = db.prepare('SELECT * FROM pages ORDER BY section_id, position');
     return stmt.all();
   },
 
   getBySection: (sectionId) => {
-    const stmt = db.prepare('SELECT * FROM pages WHERE section_id = ? ORDER BY favorite, position');
+    const stmt = db.prepare('SELECT * FROM pages WHERE section_id = ? ORDER BY position');
     return stmt.all(sectionId);
   },
 

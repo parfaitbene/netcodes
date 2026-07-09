@@ -456,7 +456,15 @@ function App() {
   const handleToggleFavorite = async (pageId) => {
     try {
       await window.api.pages.toggleFavorite(pageId);
-      await loadData();
+      // Reload only data arrays, preserving the current selection
+      const [notebooksData, sectionsData, pagesData] = await Promise.all([
+        window.api.notebooks.getAll(),
+        window.api.sections.getAll(),
+        window.api.pages.getAll(),
+      ]);
+      setNotebooks(notebooksData);
+      setSections(sectionsData);
+      setPages(pagesData);
     } catch (error) {
       console.error('Error toggling favorite:', error);
     }
@@ -578,6 +586,7 @@ function App() {
           onPageSelect={handlePageSelect}
           onCreatePage={handleCreatePage}
           onDeletePage={handleDeletePage}
+          onRenamePage={handleUpdatePageTitle}
           onToggleFavorite={handleToggleFavorite}
           onReorderPage={handleReorderPage}
           onMovePage={(page) => setMoveModal({ mode: 'page', item: page })}
