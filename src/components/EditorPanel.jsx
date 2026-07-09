@@ -3,6 +3,7 @@ import { useDrag, useDrop } from 'react-dnd';
 import { ItemTypes } from '../ItemTypes';
 import CodeBlock from './CodeBlock';
 import TextBlock from './TextBlock';
+import DropdownMenu from './DropdownMenu';
 
 const DraggableBlock = ({ block, index, moveBlock, onUpdateBlock, onDeleteBlock, onExportBlock }) => {
   const ref = useRef(null);
@@ -138,7 +139,7 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
     <div className="editor-panel">
       <div className="p-3 border-bottom bg-light sticky-top">
         <div className="d-flex justify-content-between align-items-center">
-          <div className="d-flex align-items-center gap-2">
+          <div className="d-flex align-items-center gap-2" style={{ minWidth: 0, overflow: 'hidden' }}>
             {isTitleEditing ? (
               <input
                 type="text"
@@ -153,17 +154,9 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
                 }}
               />
             ) : (
-              <h4 className="mb-0">{page.title}</h4>
+              <h4 className="mb-0 text-truncate" style={{ minWidth: 0 }}>{page.title}</h4>
             )}
-            {!isTitleEditing ? (
-              <button
-                className="btn btn-sm btn-outline-secondary"
-                onClick={() => setIsTitleEditing(true)}
-                title="Edit Page Title"
-              >
-                <i className="bi bi-pencil"></i>
-              </button>
-            ) : (
+            {isTitleEditing ? (
               <div className="d-flex gap-2">
                 <button
                   className="btn btn-sm btn-success"
@@ -171,7 +164,7 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
                     onUpdatePageTitle(page.id, editedTitle);
                     setIsTitleEditing(false);
                   }}
-                  title="Save Page Title"
+                  title="Enregistrer"
                 >
                   <i className="bi bi-check-lg"></i>
                 </button>
@@ -181,18 +174,34 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
                     setEditedTitle(page.title);
                     setIsTitleEditing(false);
                   }}
-                  title="Cancel Editing"
+                  title="Annuler"
                 >
                   <i className="bi bi-x-lg"></i>
                 </button>
               </div>
+            ) : (
+              <DropdownMenu
+                align="left"
+                items={[
+                  {
+                    label: 'Renommer la page',
+                    icon: 'bi-pencil',
+                    onClick: () => setIsTitleEditing(true),
+                  },
+                  {
+                    label: 'Exporter la page',
+                    icon: 'bi-file-earmark-arrow-down',
+                    onClick: onExportPage,
+                  },
+                ]}
+              />
             )}
           </div>
           <div className="d-flex gap-2">
             <button
               className="btn btn-sm btn-outline-primary"
               onClick={() => onCreateBlock('text')}
-              title="Add text block"
+              title="Ajouter un bloc texte"
             >
               <i className="bi bi-file-text me-1"></i>
               Text
@@ -200,17 +209,10 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
             <button
               className="btn btn-sm btn-outline-primary"
               onClick={() => onCreateBlock('code')}
-              title="Add code block"
+              title="Ajouter un bloc code"
             >
               <i className="bi bi-code-slash me-1"></i>
               Code
-            </button>
-            <button
-              className="btn btn-sm btn-outline-secondary"
-              onClick={onExportPage}
-              title="Exporter (.docx / .md)"
-            >
-              <i className="bi bi-file-earmark-arrow-down"></i>
             </button>
           </div>
         </div>

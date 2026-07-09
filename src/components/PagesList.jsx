@@ -1,6 +1,7 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { useDrag, useDrop } from 'react-dnd';
 import { ItemTypes } from '../ItemTypes';
+import DropdownMenu from './DropdownMenu';
 
 function DraggablePageItem({
   page,
@@ -9,11 +10,14 @@ function DraggablePageItem({
   selectedPage,
   onPageSelect,
   onDeletePage,
+  onRenamePage,
   onToggleFavorite,
   onMovePage,
   onExportPage,
 }) {
   const ref = useRef(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
 
   const [{ handlerId }, drop] = useDrop({
     accept: ItemTypes.PAGE,
@@ -47,55 +51,89 @@ function DraggablePageItem({
 
   drag(drop(ref));
 
+  const handleRenameSubmit = () => {
+    if (renameValue.trim() && renameValue.trim() !== page.title) {
+      onRenamePage(page.id, renameValue.trim());
+    }
+    setIsRenaming(false);
+  };
+
   return (
     <div
       ref={ref}
       data-handler-id={handlerId}
-      className={`page-item overflow-hidden ${selectedPage?.id === page.id ? 'active' : ''}`}
+      className={`page-item ${selectedPage?.id === page.id ? 'active' : ''}`}
       style={{ opacity: isDragging ? 0 : 1, cursor: 'grab' }}
-      onClick={() => onPageSelect(page)}
+      onClick={() => !isRenaming && onPageSelect(page)}
     >
-      <div className="d-flex justify-content-between align-items-start">
-        <div className="d-flex align-items-start gap-2 flex-grow-1 overflow-hidden">
-          <div className="overflow-hidden">
-            <div className="d-flex align-items-center gap-2">
-              <span className="fw-medium overflow-hidden text-truncate">{page.title}</span>
-            </div>
-            <small className="text-muted d-block mt-1">
-              {new Date(page.updated_at).toLocaleDateString()}
-            </small>
-          </div>
+      <div className="d-flex justify-content-between align-items-center gap-1">
+        <div className="flex-grow-1 overflow-hidden">
+          {isRenaming ? (
+            <input
+              autoFocus
+              type="text"
+              className="form-control form-control-sm"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleRenameSubmit();
+                if (e.key === 'Escape') setIsRenaming(false);
+              }}
+              onBlur={handleRenameSubmit}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <>
+              <span className="fw-medium text-truncate d-block">{page.title}</span>
+              <small className="text-muted d-block mt-1">
+                {new Date(page.updated_at).toLocaleDateString()}
+              </small>
+            </>
+          )}
         </div>
-        <div className="d-flex gap-1">
-          <button
-            className="btn btn-sm btn-link text-secondary p-0"
-            onClick={(e) => { e.stopPropagation(); onExportPage(page); }}
-            title="Exporter (.docx / .md)"
-          >
-            <i className="bi bi-file-earmark-arrow-down"></i>
-          </button>
-          <button
-            className="btn btn-sm btn-link text-secondary p-0"
-            onClick={(e) => { e.stopPropagation(); onMovePage(page); }}
-            title="Déplacer vers une autre section"
-          >
-            <i className="bi bi-arrow-right-square"></i>
-          </button>
-          <button
-            className="btn btn-sm btn-link text-warning p-0"
-            onClick={(e) => { e.stopPropagation(); onToggleFavorite(page.id); }}
-            title={page.favorite ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            <i className={`bi bi-star${page.favorite ? '-fill' : ''}`}></i>
-          </button>
-          <button
-            className="btn btn-sm btn-link text-danger p-0"
-            onClick={(e) => { e.stopPropagation(); onDeletePage(page.id); }}
-            title="Delete page"
-          >
-            <i className="bi bi-trash"></i>
-          </button>
-        </div>
+        {!isRenaming && (
+          <>
+            <button
+              className="btn btn-sm btn-link p-0"
+              style={{ flexShrink: 0, color: !!page.favorite ? '#ffc107' : '#adb5bd' }}
+              onClick={(e) => { e.stopPropagation(); onToggleFavorite(page.id); }}
+              title={!!page.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+            >
+              <i className={`bi bi-star${!!page.favorite ? '-fill' : ''}`}></i>
+            </button>
+            <DropdownMenu
+            items={[
+              {
+                label: 'Renommer',
+                icon: 'bi-pencil',
+                onClick: () => { setRenameValue(page.title); setIsRenaming(true); },
+              },
+              {
+                label: page.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris',
+                icon: page.favorite ? 'bi-star-fill' : 'bi-star',
+                onClick: () => onToggleFavorite(page.id),
+              },
+              {
+                label: 'Déplacer',
+                icon: 'bi-arrow-right-square',
+                onClick: () => onMovePage(page),
+              },
+              {
+                label: 'Exporter',
+                icon: 'bi-file-earmark-arrow-down',
+                onClick: () => onExportPage(page),
+              },
+              { separator: true },
+              {
+                label: 'Supprimer',
+                icon: 'bi-trash',
+                danger: true,
+                onClick: () => onDeletePage(page.id),
+              },
+            ]}
+          />
+          </>
+        )}
       </div>
     </div>
   );
@@ -107,12 +145,15 @@ function PagesList({
   onPageSelect,
   onCreatePage,
   onDeletePage,
+  onRenamePage,
   onToggleFavorite,
   onReorderPage,
   onMovePage,
   onExportPage,
   style,
 }) {
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+
   const movePage = async (id, dragIndex, hoverIndex) => {
     const draggedPage = pages.find(p => p.id === id);
     if (draggedPage) {
@@ -120,30 +161,40 @@ function PagesList({
     }
   };
 
+  const visiblePages = favoritesOnly ? pages.filter(p => p.favorite) : pages;
+
   return (
     <div className="pages-list" style={style}>
       <div className="pages-list-header p-3 border-bottom">
-        <div className="d-flex justify-content-between align-items-center mb-3">
+        <div className="d-flex justify-content-between align-items-center mb-2">
           <h6 className="mb-0">Pages</h6>
           <button
             className="btn btn-sm btn-primary"
             onClick={onCreatePage}
-            title="Create new page"
+            title="Créer une page"
           >
             <i className="bi bi-plus-lg"></i>
           </button>
         </div>
+        <button
+          className={`btn btn-sm w-100 ${favoritesOnly ? 'btn-warning' : 'btn-outline-secondary'}`}
+          onClick={() => setFavoritesOnly(prev => !prev)}
+          title={favoritesOnly ? 'Afficher toutes les pages' : 'Afficher uniquement les favoris'}
+        >
+          <i className={`bi bi-star${favoritesOnly ? '-fill' : ''} me-1`}></i>
+          {favoritesOnly ? 'Favoris uniquement' : 'Tous'}
+        </button>
       </div>
 
       <div className="pages-list-body">
-        {pages.length === 0 ? (
+        {visiblePages.length === 0 ? (
           <div className="text-center text-muted py-5">
             <i className="bi bi-file-earmark-text" style={{ fontSize: '3rem', opacity: 0.3 }}></i>
-            <p className="small mt-3">No pages in this section.</p>
-            <p className="small">Click + to create one.</p>
+            <p className="small mt-3">{favoritesOnly ? 'Aucun favori dans cette section.' : 'Aucune page dans cette section.'}</p>
+            {!favoritesOnly && <p className="small">Cliquez sur + pour en créer une.</p>}
           </div>
         ) : (
-          pages.map((page, index) => (
+          visiblePages.map((page, index) => (
             <DraggablePageItem
               key={page.id}
               page={page}
@@ -152,6 +203,7 @@ function PagesList({
               selectedPage={selectedPage}
               onPageSelect={onPageSelect}
               onDeletePage={onDeletePage}
+              onRenamePage={onRenamePage}
               onToggleFavorite={onToggleFavorite}
               onMovePage={onMovePage}
               onExportPage={onExportPage}

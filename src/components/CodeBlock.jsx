@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { useFileDrop, detectLanguage } from '../hooks/useFileDrop';
 import FileDropModal from './FileDropModal';
+import DropdownMenu from './DropdownMenu';
 
 const LANGUAGES = [
   { value: 'javascript', label: 'JavaScript' },
@@ -140,34 +141,32 @@ function CodeBlock({ block, onUpdate, onDelete, onExport, dragHandleRef }) {
             style={{ display: 'none' }}
             onChange={(e) => handleFileInput(e.target.files[0])}
           />
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            onClick={() => fileInputRef.current.click()}
-            title="Importer un fichier"
-          >
-            <i className="bi bi-upload"></i>
-          </button>
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            onClick={handleCopy}
-            title="Copy to clipboard"
-          >
-            <i className="bi bi-clipboard"></i>
-          </button>
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            onClick={onExport}
-            title="Exporter (.docx / .md)"
-          >
-            <i className="bi bi-file-earmark-arrow-down"></i>
-          </button>
-          <button
-            className="btn btn-sm btn-outline-danger"
-            onClick={() => onDelete(block.id)}
-            title="Delete"
-          >
-            <i className="bi bi-trash"></i>
-          </button>
+          <DropdownMenu
+            items={[
+              {
+                label: 'Copier le code',
+                icon: 'bi-clipboard',
+                onClick: handleCopy,
+              },
+              {
+                label: 'Importer un fichier',
+                icon: 'bi-upload',
+                onClick: () => fileInputRef.current.click(),
+              },
+              {
+                label: 'Exporter',
+                icon: 'bi-file-earmark-arrow-down',
+                onClick: onExport,
+              },
+              { separator: true },
+              {
+                label: 'Supprimer',
+                icon: 'bi-trash',
+                danger: true,
+                onClick: () => onDelete(block.id),
+              },
+            ]}
+          />
         </div>
       </div>
       <div className="code-block-wrapper" onBlur={handleSave}>
