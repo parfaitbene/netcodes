@@ -145,11 +145,12 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
     <div className="editor-panel">
       <div className="p-3 border-bottom bg-light sticky-top">
         <div className="d-flex justify-content-between align-items-center">
-          <div className="d-flex align-items-center gap-2" style={{ minWidth: 0, overflow: 'hidden' }}>
+          <div className="d-flex align-items-center gap-2" style={{ minWidth: 0, overflow: 'hidden', flex: 1 }}>
             {isTitleEditing ? (
               <input
                 type="text"
                 className="form-control form-control-sm"
+                style={{ flex: 1, border: 'none', boxShadow: 'none', borderBottom: '1px solid var(--bs-border-color)', borderRadius: 0, background: 'transparent' }}
                 value={editedTitle}
                 onChange={(e) => setEditedTitle(e.target.value)}
                 onKeyPress={(e) => {
@@ -160,7 +161,7 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
                 }}
               />
             ) : (
-              <h4 className="mb-0 text-truncate" style={{ minWidth: 0 }}>{page.title}</h4>
+              <h5 className="mb-0" style={{ minWidth: 0 }}>{page.title}</h5>
             )}
             {isTitleEditing ? (
               <div className="d-flex gap-2">
@@ -203,8 +204,9 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
               />
             )}
           </div>
-          <div className="d-flex gap-2">
+          <div className="d-flex gap-2 p-1">
             <button
+              style={{minWidth: 80}}
               className="btn btn-sm btn-outline-primary"
               onClick={() => onCreateBlock('text')}
               title="Ajouter un bloc texte"
@@ -213,6 +215,7 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
               Text
             </button>
             <button
+              style={{minWidth: 80}}
               className="btn btn-sm btn-outline-primary"
               onClick={() => onCreateBlock('code')}
               title="Ajouter un bloc code"
