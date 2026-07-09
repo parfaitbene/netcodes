@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, dialog, shell } from 'electron';
 import prompt from 'custom-electron-prompt';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -301,3 +301,7 @@ ipcMain.handle('dialog:prompt', async (event, message, defaultValue = '') => {
   });
   return result;
 });
+
+// IPC Handlers for Shell
+ipcMain.handle('shell:openPath', (_, filePath) => shell.openPath(filePath));
+ipcMain.handle('shell:showItemInFolder', (_, filePath) => shell.showItemInFolder(filePath));

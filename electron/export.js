@@ -167,7 +167,7 @@ async function saveDoc(doc, defaultName) {
 
   const buffer = await Packer.toBuffer(doc);
   fs.writeFileSync(filePath, buffer);
-  return { saved: true, filePath };
+  return { saved: true, filePath, isDir: false };
 }
 
 async function saveMarkdown(content, defaultName) {
@@ -178,7 +178,7 @@ async function saveMarkdown(content, defaultName) {
   if (canceled || !filePath) return { saved: false };
 
   fs.writeFileSync(filePath, content, 'utf-8');
-  return { saved: true, filePath };
+  return { saved: true, filePath, isDir: false };
 }
 
 function makeDoc(children, title) {
@@ -304,7 +304,7 @@ export const exportOps = {
       const destDir = await pickDestinationDir();
       if (!destDir) return { saved: false };
       const filePath = await exportPageIntoDir(destDir, page, format, 'split');
-      return { saved: true, filePath };
+      return { saved: true, filePath, isDir: false };
     } catch (e) {
       console.error('[exportPage] error:', e);
       return { saved: false, error: e.message };
@@ -322,7 +322,7 @@ export const exportOps = {
       const destDir = await pickDestinationDir();
       if (!destDir) return { saved: false };
       const filePath = await exportSectionIntoDir(destDir, section, format, blockLayout);
-      return { saved: true, filePath };
+      return { saved: true, filePath, isDir: true };
     } catch (e) {
       console.error('[exportSection] error:', e);
       return { saved: false, error: e.message };
@@ -340,7 +340,7 @@ export const exportOps = {
       const destDir = await pickDestinationDir();
       if (!destDir) return { saved: false };
       const filePath = await exportNotebookIntoDir(destDir, notebook, format, blockLayout);
-      return { saved: true, filePath };
+      return { saved: true, filePath, isDir: true };
     } catch (e) {
       console.error('[exportNotebook] error:', e);
       return { saved: false, error: e.message };

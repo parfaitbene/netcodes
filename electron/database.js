@@ -271,6 +271,7 @@ export const searchOps = {
       SELECT DISTINCT
         p.id        AS page_id,
         p.title     AS page_title,
+        p.favorite  AS page_favorite,
         s.id        AS section_id,
         s.title     AS section_title,
         n.id        AS notebook_id,
@@ -278,6 +279,7 @@ export const searchOps = {
         b.id        AS block_id,
         b.title     AS block_title,
         b.content   AS block_content,
+        b.type      AS block_type,
         b.language  AS block_language
       FROM pages p
       JOIN sections s ON p.section_id = s.id

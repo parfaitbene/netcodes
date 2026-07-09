@@ -76,4 +76,10 @@ contextBridge.exposeInMainWorld('api', {
     notebook: (notebookId, format, blockLayout) => ipcRenderer.invoke('export:notebook', notebookId, format, blockLayout),
     block: (blockId, format) => ipcRenderer.invoke('export:block', blockId, format),
   },
+
+  // Shell operations
+  shell: {
+    openPath: (filePath) => ipcRenderer.invoke('shell:openPath', filePath),
+    showItemInFolder: (filePath) => ipcRenderer.invoke('shell:showItemInFolder', filePath),
+  },
 });

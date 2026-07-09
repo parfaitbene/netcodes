@@ -126,10 +126,43 @@ function ExportModal({ mode, item, notebooks, sections, pages, onClose }) {
 
           {done && (
             <div className={`alert ${done.saved ? 'alert-success' : 'alert-danger'} py-2 mb-3`}>
-              {done.saved
-                ? <><i className="bi bi-check-circle me-2"></i>Exporté : <small>{done.filePath}</small></>
-                : <><i className="bi bi-exclamation-circle me-2"></i>{done.error ?? 'Annulé'}</>
-              }
+              {done.saved ? (
+                <div>
+                  <div className="mb-1">
+                    <i className="bi bi-check-circle me-2"></i>Export réussi
+                  </div>
+                  <div className="text-muted small mb-2" style={{ wordBreak: 'break-all' }}>
+                    {done.filePath}
+                  </div>
+                  <div className="d-flex gap-2 flex-wrap">
+                    {done.isDir ? (
+                      <button
+                        className="btn btn-sm btn-outline-success"
+                        onClick={() => window.api.shell.openPath(done.filePath)}
+                      >
+                        <i className="bi bi-folder2-open me-1"></i>Ouvrir le dossier
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          className="btn btn-sm btn-outline-success"
+                          onClick={() => window.api.shell.showItemInFolder(done.filePath)}
+                        >
+                          <i className="bi bi-folder2-open me-1"></i>Afficher dans le dossier
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline-primary"
+                          onClick={() => window.api.shell.openPath(done.filePath)}
+                        >
+                          <i className="bi bi-box-arrow-up-right me-1"></i>Ouvrir le fichier
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <><i className="bi bi-exclamation-circle me-2"></i>{done.error ?? 'Annulé'}</>
+              )}
             </div>
           )}
 
