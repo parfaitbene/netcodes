@@ -320,21 +320,23 @@ function App() {
     try {
       const currentPage = pages.find(p => p.id === pageId);
       if (!currentPage) return;
-      
+
       const sectionPages = pages
-        .filter(p => p.section_id === currentPage.section_id && !p.favorite)
+        .filter(p => p.section_id === currentPage.section_id)
         .sort((a, b) => a.position - b.position);
-      
+
       const currentIndex = sectionPages.findIndex(p => p.id === pageId);
-      const otherPage = sectionPages[newPosition];
-      
-      if (otherPage && currentIndex !== newPosition) {
-        // Swap positions
-        const tempPos = currentPage.position;
-        await window.api.pages.reorder(currentPage.id, otherPage.position);
-        await window.api.pages.reorder(otherPage.id, tempPos);
+
+      if (currentIndex !== newPosition && newPosition >= 0 && newPosition < sectionPages.length) {
+        const reorderedList = [...sectionPages];
+        const [movedItem] = reorderedList.splice(currentIndex, 1);
+        reorderedList.splice(newPosition, 0, movedItem);
+
+        for (let i = 0; i < reorderedList.length; i++) {
+          await window.api.pages.reorder(reorderedList[i].id, i + 1);
+        }
       }
-      
+
       const updatedPages = await window.api.pages.getAll();
       setPages(updatedPages);
     } catch (error) {
@@ -456,7 +458,15 @@ function App() {
   const handleToggleFavorite = async (pageId) => {
     try {
       await window.api.pages.toggleFavorite(pageId);
-      await loadData();
+      // Reload only data arrays, preserving the current selection
+      const [notebooksData, sectionsData, pagesData] = await Promise.all([
+        window.api.notebooks.getAll(),
+        window.api.sections.getAll(),
+        window.api.pages.getAll(),
+      ]);
+      setNotebooks(notebooksData);
+      setSections(sectionsData);
+      setPages(pagesData);
     } catch (error) {
       console.error('Error toggling favorite:', error);
     }
@@ -578,6 +588,7 @@ function App() {
           onPageSelect={handlePageSelect}
           onCreatePage={handleCreatePage}
           onDeletePage={handleDeletePage}
+          onRenamePage={handleUpdatePageTitle}
           onToggleFavorite={handleToggleFavorite}
           onReorderPage={handleReorderPage}
           onMovePage={(page) => setMoveModal({ mode: 'page', item: page })}

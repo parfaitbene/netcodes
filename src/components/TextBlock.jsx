@@ -4,8 +4,9 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { useFileDrop } from '../hooks/useFileDrop';
 import FileDropModal from './FileDropModal';
+import DropdownMenu from './DropdownMenu';
 
-function TextBlock({ block, onUpdate, onDelete, onExport }) {
+function TextBlock({ block, index, blockCount, onUpdate, onDelete, onExport, onReorder, dragHandleRef }) {
   const [isEditing, setIsEditing] = useState(false);
   const [content, setContent] = useState(block.content || '');
   const [editedTitle, setEditedTitle] = useState(block.title || '');
@@ -78,7 +79,7 @@ function TextBlock({ block, onUpdate, onDelete, onExport }) {
     >
       <div className="block-header">
         <div className="d-flex align-items-center gap-2 flex-grow-1">
-          <i className="reorder bi bi-grip-vertical"></i>
+          <i ref={dragHandleRef} className="reorder bi bi-grip-vertical"></i>
           <input
             type="text"
             className="form-control form-control-sm w-100"
@@ -95,50 +96,12 @@ function TextBlock({ block, onUpdate, onDelete, onExport }) {
             style={{ display: 'none' }}
             onChange={(e) => handleFileInput(e.target.files[0])}
           />
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            onClick={() => fileInputRef.current.click()}
-            title="Importer un fichier"
-          >
-            <i className="bi bi-upload"></i>
-          </button>
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            onClick={handleCopy}
-            title="Copy to clipboard"
-          >
-            <i className="bi bi-clipboard"></i>
-          </button>
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            onClick={onExport}
-            title="Exporter (.docx / .md)"
-          >
-            <i className="bi bi-file-earmark-arrow-down"></i>
-          </button>
-          {!isEditing ? (
-            <>
-              <button
-                className="btn btn-sm btn-outline-primary"
-                onClick={() => setIsEditing(true)}
-                title="Edit"
-              >
-                <i className="bi bi-pencil"></i>
-              </button>
-              <button
-                className="btn btn-sm btn-outline-danger"
-                onClick={() => onDelete(block.id)}
-                title="Delete"
-              >
-                <i className="bi bi-trash"></i>
-              </button>
-            </>
-          ) : (
+          {isEditing ? (
             <>
               <button
                 className="btn btn-sm btn-success"
                 onClick={handleSave}
-                title="Save"
+                title="Enregistrer"
               >
                 <i className="bi bi-check-lg"></i>
               </button>
@@ -149,11 +112,68 @@ function TextBlock({ block, onUpdate, onDelete, onExport }) {
                   setIsEditing(false);
                   setContent(block.content);
                 }}
-                title="Cancel"
+                title="Annuler"
               >
                 <i className="bi bi-x-lg"></i>
               </button>
             </>
+          ) : (
+            <DropdownMenu
+              items={[
+                {
+                  label: 'Éditer',
+                  icon: 'bi-pencil',
+                  onClick: () => setIsEditing(true),
+                },
+                {
+                  label: 'Copier le texte',
+                  icon: 'bi-clipboard',
+                  onClick: handleCopy,
+                },
+                {
+                  label: 'Importer un fichier',
+                  icon: 'bi-upload',
+                  onClick: () => fileInputRef.current.click(),
+                },
+                {
+                  label: 'Exporter',
+                  icon: 'bi-file-earmark-arrow-down',
+                  onClick: onExport,
+                },
+                { separator: true },
+                {
+                  label: 'Monter',
+                  icon: 'bi-arrow-up',
+                  disabled: index === 0,
+                  onClick: () => onReorder(block.id, index),
+                },
+                {
+                  label: 'En tête de liste',
+                  icon: 'bi-chevron-double-up',
+                  disabled: index === 0,
+                  onClick: () => onReorder(block.id, 1),
+                },
+                {
+                  label: 'Descendre',
+                  icon: 'bi-arrow-down',
+                  disabled: index === blockCount - 1,
+                  onClick: () => onReorder(block.id, index + 2),
+                },
+                {
+                  label: 'En fin de liste',
+                  icon: 'bi-chevron-double-down',
+                  disabled: index === blockCount - 1,
+                  onClick: () => onReorder(block.id, blockCount),
+                },
+                { separator: true },
+                {
+                  label: 'Supprimer',
+                  icon: 'bi-trash',
+                  danger: true,
+                  onClick: () => onDelete(block.id),
+                },
+              ]}
+            />
           )}
         </div>
       </div>

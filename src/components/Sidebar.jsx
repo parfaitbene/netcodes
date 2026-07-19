@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useDrag, useDrop } from 'react-dnd';
 import { ItemTypes } from '../ItemTypes';
+import DropdownMenu from './DropdownMenu';
 
 const NOTEBOOK_ICONS = ['📓', '📕', '📗', '📘', '📙', '📔', '📒', '📑', '🗒️', '📝', '✏️', '📋', '📄', '📃', '📰', '📑'];
 
@@ -73,7 +74,9 @@ function IconPickerTrigger({ icon, open, onToggle, onSelect, onClose }) {
 function DraggableNotebookItem({
   notebook,
   index,
+  notebookCount,
   moveNotebook,
+  onReorderNotebook,
   selectedNotebook,
   onNotebookSelect,
   onUpdateNotebook,
@@ -146,7 +149,7 @@ function DraggableNotebookItem({
       className="mb-2"
     >
       <div
-        className={`notebook-item overflow-hidden ${selectedNotebook?.id === notebook.id ? 'active' : ''}`}
+        className={`notebook-item ${selectedNotebook?.id === notebook.id ? 'active' : ''}`}
         onClick={() => onNotebookSelect(notebook, true)}
       >
         <span
@@ -199,7 +202,7 @@ function DraggableNotebookItem({
                 onUpdateNotebook(notebook.id, editedNotebookName, notebook.icon);
                 setEditingNotebookId(null);
               }}
-              title="Save Notebook Title"
+              title="Enregistrer"
             >
               <i className="bi bi-check-lg"></i>
             </button>
@@ -210,44 +213,62 @@ function DraggableNotebookItem({
                 setEditedNotebookName(notebook.name);
                 setEditingNotebookId(null);
               }}
-              title="Cancel Editing"
+              title="Annuler"
             >
               <i className="bi bi-x-lg"></i>
             </button>
           </div>
         ) : (
-          <button
-            className="btn btn-sm btn-link text-secondary p-0 px-1"
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditedNotebookName(notebook.name);
-              setEditingNotebookId(notebook.id);
-            }}
-            title="Edit notebook title"
-            style={{ fontSize: '0.85rem' }}
-          >
-            <i className="bi bi-pencil"></i>
-          </button>
+          <DropdownMenu
+            items={[
+              {
+                label: 'Renommer',
+                icon: 'bi-pencil',
+                onClick: () => {
+                  setEditedNotebookName(notebook.name);
+                  setEditingNotebookId(notebook.id);
+                },
+              },
+              {
+                label: 'Exporter',
+                icon: 'bi-file-earmark-arrow-down',
+                onClick: () => onExportNotebook(notebook),
+              },
+              { separator: true },
+              {
+                label: 'Monter',
+                icon: 'bi-arrow-up',
+                disabled: index === 0,
+                onClick: () => onReorderNotebook(notebook.id, index - 1),
+              },
+              {
+                label: 'En tête de liste',
+                icon: 'bi-chevron-double-up',
+                disabled: index === 0,
+                onClick: () => onReorderNotebook(notebook.id, 0),
+              },
+              {
+                label: 'Descendre',
+                icon: 'bi-arrow-down',
+                disabled: index === notebookCount - 1,
+                onClick: () => onReorderNotebook(notebook.id, index + 1),
+              },
+              {
+                label: 'En fin de liste',
+                icon: 'bi-chevron-double-down',
+                disabled: index === notebookCount - 1,
+                onClick: () => onReorderNotebook(notebook.id, notebookCount - 1),
+              },
+              { separator: true },
+              {
+                label: 'Supprimer',
+                icon: 'bi-trash',
+                danger: true,
+                onClick: () => onDeleteNotebook(notebook.id),
+              },
+            ]}
+          />
         )}
-        <button
-          className="btn btn-sm btn-link text-secondary p-0"
-          onClick={(e) => { e.stopPropagation(); onExportNotebook(notebook); }}
-          title="Exporter (.docx / .md)"
-          style={{ fontSize: '0.85rem' }}
-        >
-          <i className="bi bi-file-earmark-arrow-down"></i>
-        </button>
-        <button
-          className="btn btn-sm btn-link text-danger p-0"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDeleteNotebook(notebook.id);
-          }}
-          title="Delete notebook"
-          style={{ fontSize: '0.85rem' }}
-        >
-          <i className="bi bi-trash"></i>
-        </button>
       </div>
     </div>
   );
@@ -379,7 +400,9 @@ function Sidebar({
                 <DraggableNotebookItem
                   notebook={notebook}
                   index={index}
+                  notebookCount={notebooks.length}
                   moveNotebook={moveNotebook}
+                  onReorderNotebook={onReorderNotebook}
                   selectedNotebook={selectedNotebook}
                   onNotebookSelect={onNotebookSelect}
                   onUpdateNotebook={onUpdateNotebook}
@@ -398,60 +421,12 @@ function Sidebar({
                 {isExpanded && notebookSections.map((section, sectionIndex) => (
                   <div
                     key={section.id}
-                    className={`section-item overflow-hidden ${selectedSection?.id === section.id ? 'active' : ''}`}
+                    className={`section-item ${selectedSection?.id === section.id ? 'active' : ''}`}
+                    onClick={() => onSectionSelect(section)}
                     onMouseEnter={() => setHoveredSectionId(section.id)}
                     onMouseLeave={() => setHoveredSectionId(null)}
-                    onClick={() => onSectionSelect(section)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '24px', paddingRight: '8px' }}
+                    style={{ justifyContent: 'space-between' }}
                   >
-                    <div style={{
-                      display: 'flex',
-                      gap: '2px',
-                      opacity: hoveredSectionId === section.id ? 1 : 0,
-                      width: hoveredSectionId === section.id ? '48px' : '0px',
-                      overflow: 'hidden',
-                      transition: 'opacity 0.2s, width 0.2s',
-                      flexShrink: 0,
-                    }}>
-                      <button
-                        className="btn btn-sm btn-link text-secondary p-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (sectionIndex > 0) {
-                            onReorderSection(section.id, sectionIndex - 1);
-                          }
-                        }}
-                        disabled={sectionIndex === 0}
-                        title="Move up"
-                        style={{
-                          fontSize: '0.75rem',
-                          cursor: sectionIndex === 0 ? 'not-allowed' : 'pointer',
-                          padding: '2px 4px',
-                          minWidth: '24px',
-                        }}
-                      >
-                        <i className="bi bi-arrow-up"></i>
-                      </button>
-                      <button
-                        className="btn btn-sm btn-link text-secondary p-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (sectionIndex < notebookSections.length - 1) {
-                            onReorderSection(section.id, sectionIndex + 1);
-                          }
-                        }}
-                        disabled={sectionIndex === notebookSections.length - 1}
-                        title="Move down"
-                        style={{
-                          fontSize: '0.75rem',
-                          cursor: sectionIndex === notebookSections.length - 1 ? 'not-allowed' : 'pointer',
-                          padding: '2px 4px',
-                          minWidth: '24px',
-                        }}
-                      >
-                        <i className="bi bi-arrow-down"></i>
-                      </button>
-                    </div>
                     <span
                       style={{
                         width: '8px',
@@ -462,7 +437,7 @@ function Sidebar({
                         flexShrink: 0,
                       }}
                     ></span>
-                    <span className="flex-grow-1 text-truncate overflow-hidden">
+                    <span style={{ flexGrow: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {editingSectionId === section.id ? (
                         <input
                           type="text"
@@ -481,75 +456,95 @@ function Sidebar({
                         section.title
                       )}
                     </span>
-                    {editingSectionId === section.id ? (
-                      <div className="d-flex gap-1">
-                        <button
-                          className="btn btn-sm btn-success p-0 px-1"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onUpdateSection(section.id, editedSectionTitle, section.color);
-                            setEditingSectionId(null);
-                          }}
-                          title="Save Section Title"
-                        >
-                          <i className="bi bi-check-lg"></i>
-                        </button>
-                        <button
-                          className="btn btn-sm btn-secondary p-0 px-1"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditedSectionTitle(section.title);
-                            setEditingSectionId(null);
-                          }}
-                          title="Cancel Editing"
-                        >
-                          <i className="bi bi-x-lg"></i>
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        className="btn btn-sm btn-link text-secondary p-0 px-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditedSectionTitle(section.title);
-                          setEditingSectionId(section.id);
-                        }}
-                        title="Edit section title"
-                        style={{ fontSize: '0.75rem' }}
-                      >
-                        <i className="bi bi-pencil"></i>
-                      </button>
-                    )}
-                    <button
-                      className="btn btn-sm btn-link text-secondary p-0"
-                      onClick={(e) => { e.stopPropagation(); onExportSection(section); }}
-                      title="Exporter (.docx / .md)"
-                      style={{ fontSize: '0.75rem' }}
-                    >
-                      <i className="bi bi-file-earmark-arrow-down"></i>
-                    </button>
-                    <button
-                      className="btn btn-sm btn-link text-secondary p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onMoveSection(section);
-                      }}
-                      title="Déplacer vers un autre notebook"
-                      style={{ fontSize: '0.75rem' }}
-                    >
-                      <i className="bi bi-arrow-right-square"></i>
-                    </button>
-                    <button
-                      className="btn btn-sm btn-link text-danger p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteSection(section.id);
-                      }}
-                      title="Delete section"
-                      style={{ fontSize: '0.75rem' }}
-                    >
-                      <i className="bi bi-trash"></i>
-                    </button>
+                    <div style={{
+                      overflow: 'hidden',
+                      flexShrink: 0,
+                      opacity: hoveredSectionId === section.id || editingSectionId === section.id ? 1 : 0,
+                      width: hoveredSectionId === section.id || editingSectionId === section.id ? '48px' : '0px',
+                      transition: 'opacity 0.25s, width 0.25s',
+                    }}>
+                      {editingSectionId === section.id ? (
+                        <div className="d-flex gap-1">
+                          <button
+                            className="btn btn-sm btn-success p-0 px-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateSection(section.id, editedSectionTitle, section.color);
+                              setEditingSectionId(null);
+                            }}
+                            title="Enregistrer"
+                          >
+                            <i className="bi bi-check-lg"></i>
+                          </button>
+                          <button
+                            className="btn btn-sm btn-secondary p-0 px-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditedSectionTitle(section.title);
+                              setEditingSectionId(null);
+                            }}
+                            title="Annuler"
+                          >
+                            <i className="bi bi-x-lg"></i>
+                          </button>
+                        </div>
+                      ) : (
+                        <DropdownMenu
+                          items={[
+                            {
+                              label: 'Renommer',
+                              icon: 'bi-pencil',
+                              onClick: () => {
+                                setEditedSectionTitle(section.title);
+                                setEditingSectionId(section.id);
+                              },
+                            },
+                            {
+                              label: 'Déplacer',
+                              icon: 'bi-arrow-right-square',
+                              onClick: () => onMoveSection(section),
+                            },
+                            {
+                              label: 'Exporter',
+                              icon: 'bi-file-earmark-arrow-down',
+                              onClick: () => onExportSection(section),
+                            },
+                            { separator: true },
+                            {
+                              label: 'Monter',
+                              icon: 'bi-arrow-up',
+                              disabled: sectionIndex === 0,
+                              onClick: () => onReorderSection(section.id, sectionIndex - 1),
+                            },
+                            {
+                              label: 'En tête de liste',
+                              icon: 'bi-chevron-double-up',
+                              disabled: sectionIndex === 0,
+                              onClick: () => onReorderSection(section.id, 0),
+                            },
+                            {
+                              label: 'Descendre',
+                              icon: 'bi-arrow-down',
+                              disabled: sectionIndex === notebookSections.length - 1,
+                              onClick: () => onReorderSection(section.id, sectionIndex + 1),
+                            },
+                            {
+                              label: 'En fin de liste',
+                              icon: 'bi-chevron-double-down',
+                              disabled: sectionIndex === notebookSections.length - 1,
+                              onClick: () => onReorderSection(section.id, notebookSections.length - 1),
+                            },
+                            { separator: true },
+                            {
+                              label: 'Supprimer',
+                              icon: 'bi-trash',
+                              danger: true,
+                              onClick: () => onDeleteSection(section.id),
+                            },
+                          ]}
+                        />
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

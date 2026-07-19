@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { useFileDrop, detectLanguage } from '../hooks/useFileDrop';
 import FileDropModal from './FileDropModal';
+import DropdownMenu from './DropdownMenu';
 
 const LANGUAGES = [
   { value: 'javascript', label: 'JavaScript' },
@@ -30,7 +31,7 @@ const LANGUAGES = [
   { value: 'plaintext', label: 'Plain Text' },
 ];
 
-function CodeBlock({ block, onUpdate, onDelete, onExport }) {
+function CodeBlock({ block, index, blockCount, onUpdate, onDelete, onExport, onReorder, dragHandleRef }) {
   const [language, setLanguage] = useState(block.language || 'javascript');
   const [code, setCode] = useState(block.content || '');
   const [editedTitle, setEditedTitle] = useState(block.title || '');
@@ -111,7 +112,7 @@ function CodeBlock({ block, onUpdate, onDelete, onExport }) {
     >
       <div className="block-header">
         <div className="d-flex align-items-center gap-2 flex-grow-1">
-          <i className="reorder bi bi-grip-vertical"></i>
+          <i ref={dragHandleRef} className="reorder bi bi-grip-vertical"></i>
           <input
             type="text"
             className="form-control form-control-sm w-100"
@@ -140,34 +141,57 @@ function CodeBlock({ block, onUpdate, onDelete, onExport }) {
             style={{ display: 'none' }}
             onChange={(e) => handleFileInput(e.target.files[0])}
           />
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            onClick={() => fileInputRef.current.click()}
-            title="Importer un fichier"
-          >
-            <i className="bi bi-upload"></i>
-          </button>
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            onClick={handleCopy}
-            title="Copy to clipboard"
-          >
-            <i className="bi bi-clipboard"></i>
-          </button>
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            onClick={onExport}
-            title="Exporter (.docx / .md)"
-          >
-            <i className="bi bi-file-earmark-arrow-down"></i>
-          </button>
-          <button
-            className="btn btn-sm btn-outline-danger"
-            onClick={() => onDelete(block.id)}
-            title="Delete"
-          >
-            <i className="bi bi-trash"></i>
-          </button>
+          <DropdownMenu
+            items={[
+              {
+                label: 'Copier le code',
+                icon: 'bi-clipboard',
+                onClick: handleCopy,
+              },
+              {
+                label: 'Importer un fichier',
+                icon: 'bi-upload',
+                onClick: () => fileInputRef.current.click(),
+              },
+              {
+                label: 'Exporter',
+                icon: 'bi-file-earmark-arrow-down',
+                onClick: onExport,
+              },
+              { separator: true },
+              {
+                label: 'Monter',
+                icon: 'bi-arrow-up',
+                disabled: index === 0,
+                onClick: () => onReorder(block.id, index),
+              },
+              {
+                label: 'En tête de liste',
+                icon: 'bi-chevron-double-up',
+                disabled: index === 0,
+                onClick: () => onReorder(block.id, 1),
+              },
+              {
+                label: 'Descendre',
+                icon: 'bi-arrow-down',
+                disabled: index === blockCount - 1,
+                onClick: () => onReorder(block.id, index + 2),
+              },
+              {
+                label: 'En fin de liste',
+                icon: 'bi-chevron-double-down',
+                disabled: index === blockCount - 1,
+                onClick: () => onReorder(block.id, blockCount),
+              },
+              { separator: true },
+              {
+                label: 'Supprimer',
+                icon: 'bi-trash',
+                danger: true,
+                onClick: () => onDelete(block.id),
+              },
+            ]}
+          />
         </div>
       </div>
       <div className="code-block-wrapper" onBlur={handleSave}>

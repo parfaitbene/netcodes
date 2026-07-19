@@ -3,9 +3,11 @@ import { useDrag, useDrop } from 'react-dnd';
 import { ItemTypes } from '../ItemTypes';
 import CodeBlock from './CodeBlock';
 import TextBlock from './TextBlock';
+import DropdownMenu from './DropdownMenu';
 
-const DraggableBlock = ({ block, index, moveBlock, onUpdateBlock, onDeleteBlock, onExportBlock }) => {
+const DraggableBlock = ({ block, index, blockCount, moveBlock, onReorderBlock, onUpdateBlock, onDeleteBlock, onExportBlock }) => {
   const ref = useRef(null);
+  const dragHandleRef = useRef(null);
   const [{ handlerId }, drop] = useDrop({
     accept: ItemTypes.BLOCK,
     collect(monitor) {
@@ -71,23 +73,32 @@ const DraggableBlock = ({ block, index, moveBlock, onUpdateBlock, onDeleteBlock,
   });
 
   const opacity = isDragging ? 0 : 1;
-  drag(drop(ref));
+  drop(ref);
+  drag(dragHandleRef);
 
   return (
     <div ref={ref} style={{ opacity }} data-handler-id={handlerId}>
       {block.type === 'text' ? (
         <TextBlock
           block={block}
+          index={index}
+          blockCount={blockCount}
           onUpdate={onUpdateBlock}
           onDelete={onDeleteBlock}
           onExport={() => onExportBlock(block)}
+          onReorder={onReorderBlock}
+          dragHandleRef={dragHandleRef}
         />
       ) : block.type === 'code' ? (
         <CodeBlock
           block={block}
+          index={index}
+          blockCount={blockCount}
           onUpdate={onUpdateBlock}
           onDelete={onDeleteBlock}
           onExport={() => onExportBlock(block)}
+          onReorder={onReorderBlock}
+          dragHandleRef={dragHandleRef}
         />
       ) : null}
     </div>
@@ -134,11 +145,12 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
     <div className="editor-panel">
       <div className="p-3 border-bottom bg-light sticky-top">
         <div className="d-flex justify-content-between align-items-center">
-          <div className="d-flex align-items-center gap-2">
+          <div className="d-flex align-items-center gap-2" style={{ minWidth: 0, overflow: 'hidden', flex: 1 }}>
             {isTitleEditing ? (
               <input
                 type="text"
                 className="form-control form-control-sm"
+                style={{ flex: 1, border: 'none', boxShadow: 'none', borderBottom: '1px solid var(--bs-border-color)', borderRadius: 0, background: 'transparent' }}
                 value={editedTitle}
                 onChange={(e) => setEditedTitle(e.target.value)}
                 onKeyPress={(e) => {
@@ -149,17 +161,9 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
                 }}
               />
             ) : (
-              <h4 className="mb-0">{page.title}</h4>
+              <h5 className="mb-0" style={{ minWidth: 0 }}>{page.title}</h5>
             )}
-            {!isTitleEditing ? (
-              <button
-                className="btn btn-sm btn-outline-secondary"
-                onClick={() => setIsTitleEditing(true)}
-                title="Edit Page Title"
-              >
-                <i className="bi bi-pencil"></i>
-              </button>
-            ) : (
+            {isTitleEditing ? (
               <div className="d-flex gap-2">
                 <button
                   className="btn btn-sm btn-success"
@@ -167,7 +171,7 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
                     onUpdatePageTitle(page.id, editedTitle);
                     setIsTitleEditing(false);
                   }}
-                  title="Save Page Title"
+                  title="Enregistrer"
                 >
                   <i className="bi bi-check-lg"></i>
                 </button>
@@ -177,36 +181,47 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
                     setEditedTitle(page.title);
                     setIsTitleEditing(false);
                   }}
-                  title="Cancel Editing"
+                  title="Annuler"
                 >
                   <i className="bi bi-x-lg"></i>
                 </button>
               </div>
+            ) : (
+              <DropdownMenu
+                align="left"
+                items={[
+                  {
+                    label: 'Renommer la page',
+                    icon: 'bi-pencil',
+                    onClick: () => setIsTitleEditing(true),
+                  },
+                  {
+                    label: 'Exporter la page',
+                    icon: 'bi-file-earmark-arrow-down',
+                    onClick: onExportPage,
+                  },
+                ]}
+              />
             )}
           </div>
-          <div className="d-flex gap-2">
+          <div className="d-flex gap-2 p-1">
             <button
+              style={{minWidth: 80}}
               className="btn btn-sm btn-outline-primary"
               onClick={() => onCreateBlock('text')}
-              title="Add text block"
+              title="Ajouter un bloc texte"
             >
               <i className="bi bi-file-text me-1"></i>
               Text
             </button>
             <button
+              style={{minWidth: 80}}
               className="btn btn-sm btn-outline-primary"
               onClick={() => onCreateBlock('code')}
-              title="Add code block"
+              title="Ajouter un bloc code"
             >
               <i className="bi bi-code-slash me-1"></i>
               Code
-            </button>
-            <button
-              className="btn btn-sm btn-outline-secondary"
-              onClick={onExportPage}
-              title="Exporter (.docx / .md)"
-            >
-              <i className="bi bi-file-earmark-arrow-down"></i>
             </button>
           </div>
         </div>
@@ -227,8 +242,10 @@ function EditorPanel({ page, blocks, onCreateBlock, onUpdateBlock, onDeleteBlock
             <DraggableBlock
               key={block.id}
               index={index}
+              blockCount={localBlocks.length}
               block={block}
               moveBlock={moveBlock}
+              onReorderBlock={onReorderBlock}
               onUpdateBlock={onUpdateBlock}
               onDeleteBlock={onDeleteBlock}
               onExportBlock={onExportBlock}

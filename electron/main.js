@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, dialog, shell } from 'electron';
 import prompt from 'custom-electron-prompt';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -90,6 +90,18 @@ function createWindow() {
 function setupApplicationMenu() {
   const currentPath = getDbPath() || getDefaultDbPath();
   const template = [
+    {
+      label: 'Édition',
+      submenu: [
+        { role: 'undo', label: 'Annuler' },
+        { role: 'redo', label: 'Rétablir' },
+        { type: 'separator' },
+        { role: 'cut', label: 'Couper' },
+        { role: 'copy', label: 'Copier' },
+        { role: 'paste', label: 'Coller' },
+        { role: 'selectAll', label: 'Tout sélectionner' },
+      ],
+    },
     {
       label: 'Paramètres',
       submenu: [
@@ -289,3 +301,7 @@ ipcMain.handle('dialog:prompt', async (event, message, defaultValue = '') => {
   });
   return result;
 });
+
+// IPC Handlers for Shell
+ipcMain.handle('shell:openPath', (_, filePath) => shell.openPath(filePath));
+ipcMain.handle('shell:showItemInFolder', (_, filePath) => shell.showItemInFolder(filePath));
