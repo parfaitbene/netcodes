@@ -191,20 +191,26 @@ export const searchOps = {
       ORDER BY s.title
     `, [term]);
 
+    // ORDER BY sur un SELECT DISTINCT doit référencer une colonne présente dans
+    // le SELECT : PostgreSQL et MySQL l'exigent strictement (SQLite l'ignore).
+    // On sélectionne donc explicitement p.updated_at (aliasé) et on trie sur cet
+    // alias. `updated_at` dépend fonctionnellement de p.id (déjà sélectionné),
+    // donc son ajout ne change pas le nombre de lignes renvoyées par DISTINCT.
     const pages = await d.all(`
       SELECT DISTINCT
-        p.id        AS page_id,
-        p.title     AS page_title,
-        p.favorite  AS page_favorite,
-        s.id        AS section_id,
-        s.title     AS section_title,
-        n.id        AS notebook_id,
-        n.name      AS notebook_name,
-        b.id        AS block_id,
-        b.title     AS block_title,
-        b.content   AS block_content,
-        b.type      AS block_type,
-        b.language  AS block_language
+        p.id          AS page_id,
+        p.title       AS page_title,
+        p.favorite    AS page_favorite,
+        p.updated_at  AS page_updated_at,
+        s.id          AS section_id,
+        s.title       AS section_title,
+        n.id          AS notebook_id,
+        n.name        AS notebook_name,
+        b.id          AS block_id,
+        b.title       AS block_title,
+        b.content     AS block_content,
+        b.type        AS block_type,
+        b.language    AS block_language
       FROM pages p
       JOIN sections s ON p.section_id = s.id
       JOIN notebooks n ON s.notebook_id = n.id
@@ -212,7 +218,7 @@ export const searchOps = {
       WHERE LOWER(p.title) LIKE ?
          OR LOWER(b.title) LIKE ?
          OR LOWER(b.content) LIKE ?
-      ORDER BY p.updated_at DESC
+      ORDER BY page_updated_at DESC
     `, [term, term, term]);
 
     return { notebooks, sections, pages };
