@@ -7,6 +7,7 @@ import EditorPanel from './components/EditorPanel';
 import SearchModal from './components/SearchModal';
 import MoveModal from './components/MoveModal';
 import ExportModal from './components/ExportModal';
+import ConnectionsModal from './components/ConnectionsModal';
 
 function App() {
   // State for application data
@@ -20,7 +21,11 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [showSearch, setShowSearch] = useState(false);
   const [moveModal, setMoveModal] = useState(null); // { mode: 'page'|'section', item }
-  const [exportModal, setExportModal] = useState(null); // { mode: 'page'|'section'|'notebook', item }
+  const [exportModal, setExportModal] = useState(null); // { mode: 'page'|'section'|'notebook'|'block', item }
+
+  // State for multi-connection support
+  const [connections, setConnections] = useState([]);
+  const [showConnections, setShowConnections] = useState(false);
 
   // State for panel resizing
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -84,43 +89,63 @@ function App() {
     };
   }, [resizePanels, stopResizing]);
 
-  // Function to load initial data
+  // Function to load initial data across every connected database.
+  // Row ids are only unique WITHIN a connection, so every row loaded here is
+  // tagged with the connId it came from — every downstream filter/find/API
+  // call keys off that tag, never off the bare row id alone.
   const loadData = async () => {
     try {
-      if (!window.api) {
-        throw new Error('Electron API not available');
-      }
-      const notebooksData = await window.api.notebooks.getAll();
-      const sectionsData = await window.api.sections.getAll();
-      const pagesData = await window.api.pages.getAll();
+      if (!window.api) throw new Error('Electron API not available');
+      const conns = await window.api.connections.list();
+      setConnections(conns);
 
+      const connected = conns.filter(c => c.status.state === 'connected');
+      const perConn = await Promise.all(connected.map(async (c) => {
+        const [nbs, secs, pgs] = await Promise.all([
+          window.api.notebooks.getAll(c.id),
+          window.api.sections.getAll(c.id),
+          window.api.pages.getAll(c.id),
+        ]);
+        const tag = (rows) => rows.map(r => ({ ...r, connId: c.id }));
+        return { notebooks: tag(nbs), sections: tag(secs), pages: tag(pgs) };
+      }));
+
+      const notebooksData = perConn.flatMap(d => d.notebooks);
+      const sectionsData = perConn.flatMap(d => d.sections);
+      const pagesData = perConn.flatMap(d => d.pages);
       setNotebooks(notebooksData);
       setSections(sectionsData);
       setPages(pagesData);
 
-      // Try to restore the last active page from a previous session
-      const lastPageId = localStorage.getItem('lastActivePageId');
-      const lastPage = lastPageId ? pagesData.find(p => String(p.id) === lastPageId) : null;
-      const lastSection = lastPage ? sectionsData.find(s => s.id === lastPage.section_id) : null;
-      const lastNotebook = lastSection ? notebooksData.find(n => n.id === lastSection.notebook_id) : null;
+      // Restauration de la dernière page active : clé "<connId>:<pageId>"
+      const lastKey = localStorage.getItem('lastActivePageKey');
+      const lastPage = lastKey
+        ? pagesData.find(p => `${p.connId}:${p.id}` === lastKey)
+        : null;
+      const lastSection = lastPage
+        ? sectionsData.find(s => s.connId === lastPage.connId && s.id === lastPage.section_id)
+        : null;
+      const lastNotebook = lastSection
+        ? notebooksData.find(n => n.connId === lastSection.connId && n.id === lastSection.notebook_id)
+        : null;
 
       if (lastPage && lastSection && lastNotebook) {
         setSelectedNotebook(lastNotebook);
         setSelectedSection(lastSection);
         setSelectedPage(lastPage);
-        const blocksData = await window.api.blocks.getByPage(lastPage.id);
-        setBlocks(blocksData);
+        const blocksData = await window.api.blocks.getByPage(lastPage.connId, lastPage.id);
+        setBlocks(blocksData.map(b => ({ ...b, connId: lastPage.connId })));
       } else if (notebooksData.length > 0) {
-        // Auto-select first notebook and section if available
-        setSelectedNotebook(notebooksData[0]);
-        const firstSection = sectionsData.find(s => s.notebook_id === notebooksData[0].id);
+        const first = notebooksData[0];
+        setSelectedNotebook(first);
+        const firstSection = sectionsData.find(s => s.connId === first.connId && s.notebook_id === first.id);
         if (firstSection) {
           setSelectedSection(firstSection);
-          const firstPage = pagesData.find(p => p.section_id === firstSection.id);
+          const firstPage = pagesData.find(p => p.connId === firstSection.connId && p.section_id === firstSection.id);
           if (firstPage) {
             setSelectedPage(firstPage);
-            const blocksData = await window.api.blocks.getByPage(firstPage.id);
-            setBlocks(blocksData);
+            const blocksData = await window.api.blocks.getByPage(firstPage.connId, firstPage.id);
+            setBlocks(blocksData.map(b => ({ ...b, connId: firstPage.connId })));
           }
         }
       }
@@ -145,9 +170,10 @@ function App() {
     // Only persist when a page is actually selected — selectedPage is
     // transiently null on mount (while loadData is still fetching) and
     // when switching sections/notebooks, and we don't want those moments
-    // to erase the remembered last-active page.
+    // to erase the remembered last-active page. Key is "<connId>:<pageId>"
+    // since a bare page id is not unique across connections.
     if (selectedPage) {
-      localStorage.setItem('lastActivePageId', String(selectedPage.id));
+      localStorage.setItem('lastActivePageKey', `${selectedPage.connId}:${selectedPage.id}`);
     }
   }, [selectedPage]);
 
@@ -162,10 +188,19 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Subscribe to connection status changes (reload everything) and to the
+  // main process asking us to open the connections manager (app menu, etc.)
+  useEffect(() => {
+    if (!window.api) return;
+    const offStatus = window.api.onConnectionStatusChanged(() => { loadData(); });
+    const offOpen = window.api.onOpenConnectionsModal(() => setShowConnections(true));
+    return () => { offStatus(); offOpen(); };
+  }, []);
+
   // Handlers for application logic
   const handleNotebookSelect = async (notebook, handleChildSelectection = false) => {
     setSelectedNotebook(notebook);
-    const notebookSections = sections.filter(s => s.notebook_id === notebook.id);
+    const notebookSections = sections.filter(s => s.connId === notebook.connId && s.notebook_id === notebook.id);
     if (handleChildSelectection && notebookSections.length > 0) {
       await handleSectionSelect(notebookSections[0]);
     } else {
@@ -177,10 +212,10 @@ function App() {
 
   const handleSectionSelect = async (section, handleChildSelectection = false) => {
     setSelectedSection(section);
-    const notebook = await window.api.notebooks.getById(section.notebook_id);
-      setSelectedNotebook(notebook);
+    const notebook = await window.api.notebooks.getById(section.connId, section.notebook_id);
+    setSelectedNotebook({ ...notebook, connId: section.connId });
 
-    const sectionPages = pages.filter(p => p.section_id === section.id);
+    const sectionPages = pages.filter(p => p.connId === section.connId && p.section_id === section.id);
     if (handleChildSelectection && sectionPages.length > 0) {
       await handlePageSelect(sectionPages[0]);
     } else {
@@ -192,25 +227,32 @@ function App() {
   const handlePageSelect = async (page) => {
     setSelectedPage(page);
     try {
-      const section = await window.api.sections.getById(page.section_id);
-      setSelectedSection(section);
-      const notebook = await window.api.notebooks.getById(section.notebook_id);
-      setSelectedNotebook(notebook);
-      const blocksData = await window.api.blocks.getByPage(page.id);
-      setBlocks(blocksData);
+      const section = await window.api.sections.getById(page.connId, page.section_id);
+      setSelectedSection({ ...section, connId: page.connId });
+      const notebook = await window.api.notebooks.getById(page.connId, section.notebook_id);
+      setSelectedNotebook({ ...notebook, connId: page.connId });
+      const blocksData = await window.api.blocks.getByPage(page.connId, page.id);
+      setBlocks(blocksData.map(b => ({ ...b, connId: page.connId })));
     } catch (error) {
       console.error('Error loading page:', error);
     }
   };
 
-  const handleCreateNotebook = async () => {
+  // Optional leading connId: used by the sidebar's per-connection "+" button
+  // (Task 11). When omitted, targets the connection of the current
+  // selection, falling back to the first connected database.
+  const handleCreateNotebook = async (connId) => {
     const name = await window.api.dialog.prompt('Enter notebook name:');
     if (name) {
       try {
-        const idNoteBook = await window.api.notebooks.create(name, '📓');
-        const notebook = await window.api.notebooks.getById(idNoteBook);
+        const targetConnId = connId
+          ?? selectedNotebook?.connId
+          ?? connections.find(c => c.status.state === 'connected')?.id;
+        if (!targetConnId) { alert('Aucune base connectée.'); return; }
+        const idNoteBook = await window.api.notebooks.create(targetConnId, name, '📓');
+        const notebook = await window.api.notebooks.getById(targetConnId, idNoteBook);
         await loadData();
-        await handleNotebookSelect(notebook);
+        await handleNotebookSelect({ ...notebook, connId: targetConnId });
       } catch (error) {
         console.error('Error creating notebook:', error);
       }
@@ -225,34 +267,40 @@ function App() {
     const title = await window.api.dialog.prompt('Enter section title:');
     if (title) {
       try {
-        const sectionId = await window.api.sections.create(selectedNotebook.id, title, '#007bff');
-        const section = await window.api.sections.getById(sectionId);
+        const connId = selectedNotebook.connId;
+        const sectionId = await window.api.sections.create(connId, selectedNotebook.id, title, '#007bff');
+        const section = await window.api.sections.getById(connId, sectionId);
         await loadData();
-        await handleSectionSelect(section);
+        await handleSectionSelect({ ...section, connId });
       } catch (error) {
         console.error('Error creating section:', error);
       }
     }
   };
 
-  const handleUpdateNotebook = async (notebookId, newName, newIcon) => {
+  // Sidebar's notebook tree spans every connection at once, so there is no
+  // single "current" connId to infer this from — the caller must supply it.
+  // (Sidebar itself still calls this with a bare id until Task 11 updates it.)
+  const handleUpdateNotebook = async (connId, notebookId, newName, newIcon) => {
     try {
-      await window.api.notebooks.update(notebookId, newName, newIcon);
+      await window.api.notebooks.update(connId, notebookId, newName, newIcon);
       await loadData();
       setSelectedNotebook(prevNotebook =>
-        prevNotebook && prevNotebook.id === notebookId ? { ...prevNotebook, name: newName, icon: newIcon } : prevNotebook
+        prevNotebook && prevNotebook.connId === connId && prevNotebook.id === notebookId
+          ? { ...prevNotebook, name: newName, icon: newIcon }
+          : prevNotebook
       );
     } catch (error) {
       console.error('Error updating notebook name:', error);
     }
   };
 
-  const handleDeleteNotebook = async (notebookId) => {
+  const handleDeleteNotebook = async (connId, notebookId) => {
     if (window.confirm('Are you sure you want to delete this notebook? All sections and pages inside will also be deleted.')) {
       try {
-        await window.api.notebooks.delete(notebookId);
+        await window.api.notebooks.delete(connId, notebookId);
         await loadData();
-        if (selectedNotebook?.id === notebookId) {
+        if (selectedNotebook?.connId === connId && selectedNotebook?.id === notebookId) {
           setSelectedNotebook(null);
           setSelectedSection(null);
           setSelectedPage(null);
@@ -264,108 +312,122 @@ function App() {
     }
   };
 
-  const handleReorderNotebook = async (notebookId, newPosition) => {
+  const handleReorderNotebook = async (connId, notebookId, newPosition) => {
     try {
-      const allNotebooks = [...notebooks].sort((a, b) => a.position - b.position);
-      const currentIndex = allNotebooks.findIndex(n => n.id === notebookId);
-      
-      if (currentIndex !== newPosition && newPosition >= 0 && newPosition < allNotebooks.length) {
-        const reorderedList = [...allNotebooks];
+      const connNotebooks = notebooks.filter(n => n.connId === connId).sort((a, b) => a.position - b.position);
+      const currentIndex = connNotebooks.findIndex(n => n.id === notebookId);
+
+      if (currentIndex !== -1 && currentIndex !== newPosition && newPosition >= 0 && newPosition < connNotebooks.length) {
+        const reorderedList = [...connNotebooks];
         const [movedItem] = reorderedList.splice(currentIndex, 1);
         reorderedList.splice(newPosition, 0, movedItem);
-        
-        // Reorder all notebooks with new sequential positions
+
+        // Reorder all notebooks of this connection with new sequential positions
         for (let i = 0; i < reorderedList.length; i++) {
-          await window.api.notebooks.reorder(reorderedList[i].id, i + 1);
+          await window.api.notebooks.reorder(connId, reorderedList[i].id, i + 1);
         }
       }
-      
-      const updatedNotebooks = await window.api.notebooks.getAll();
-      setNotebooks(updatedNotebooks);
+
+      const updatedNotebooks = await window.api.notebooks.getAll(connId);
+      const tagged = updatedNotebooks.map(n => ({ ...n, connId }));
+      // Replace only this connection's slice — other connections' notebooks
+      // are untouched and must not be dropped from state.
+      setNotebooks(prev => [...prev.filter(n => n.connId !== connId), ...tagged]);
     } catch (error) {
       console.error('Error reordering notebook:', error);
     }
   };
 
-  const handleReorderSection = async (sectionId, newPosition) => {
+  const handleReorderSection = async (connId, sectionId, newPosition) => {
     try {
-      const currentSection = sections.find(s => s.id === sectionId);
+      const currentSection = sections.find(s => s.connId === connId && s.id === sectionId);
       if (!currentSection) return;
-      
+
       const notebookSections = sections
-        .filter(s => s.notebook_id === currentSection.notebook_id)
+        .filter(s => s.connId === connId && s.notebook_id === currentSection.notebook_id)
         .sort((a, b) => a.position - b.position);
-      
+
       const currentIndex = notebookSections.findIndex(s => s.id === sectionId);
-      
-      if (currentIndex !== newPosition && newPosition >= 0 && newPosition < notebookSections.length) {
+
+      if (currentIndex !== -1 && currentIndex !== newPosition && newPosition >= 0 && newPosition < notebookSections.length) {
         const reorderedList = [...notebookSections];
         const [movedItem] = reorderedList.splice(currentIndex, 1);
         reorderedList.splice(newPosition, 0, movedItem);
-        
+
         // Reorder all sections with new sequential positions
         for (let i = 0; i < reorderedList.length; i++) {
-          await window.api.sections.reorder(reorderedList[i].id, i + 1);
+          await window.api.sections.reorder(connId, reorderedList[i].id, i + 1);
         }
       }
-      
-      const updatedSections = await window.api.sections.getAll();
-      setSections(updatedSections);
+
+      const updatedSections = await window.api.sections.getAll(connId);
+      const tagged = updatedSections.map(s => ({ ...s, connId }));
+      setSections(prev => [...prev.filter(s => s.connId !== connId), ...tagged]);
     } catch (error) {
       console.error('Error reordering section:', error);
     }
   };
 
+  // Pages under a section are always scoped to that section's connection
+  // (PagesList only ever shows selectedSection's own pages), so the
+  // reorder target's connId comes straight from the current selection.
   const handleReorderPage = async (pageId, newPosition) => {
     try {
-      const currentPage = pages.find(p => p.id === pageId);
+      const connId = selectedSection?.connId;
+      if (!connId) return;
+      const currentPage = pages.find(p => p.connId === connId && p.id === pageId);
       if (!currentPage) return;
 
       const sectionPages = pages
-        .filter(p => p.section_id === currentPage.section_id)
+        .filter(p => p.connId === connId && p.section_id === currentPage.section_id)
         .sort((a, b) => a.position - b.position);
 
       const currentIndex = sectionPages.findIndex(p => p.id === pageId);
 
-      if (currentIndex !== newPosition && newPosition >= 0 && newPosition < sectionPages.length) {
+      if (currentIndex !== -1 && currentIndex !== newPosition && newPosition >= 0 && newPosition < sectionPages.length) {
         const reorderedList = [...sectionPages];
         const [movedItem] = reorderedList.splice(currentIndex, 1);
         reorderedList.splice(newPosition, 0, movedItem);
 
         for (let i = 0; i < reorderedList.length; i++) {
-          await window.api.pages.reorder(reorderedList[i].id, i + 1);
+          await window.api.pages.reorder(connId, reorderedList[i].id, i + 1);
         }
       }
 
-      const updatedPages = await window.api.pages.getAll();
-      setPages(updatedPages);
+      const updatedPages = await window.api.pages.getAll(connId);
+      const tagged = updatedPages.map(p => ({ ...p, connId }));
+      setPages(prev => [...prev.filter(p => p.connId !== connId), ...tagged]);
     } catch (error) {
       console.error('Error reordering page:', error);
     }
   };
 
-  const handleUpdateSection = async (sectionId, newTitle, newColor) => {
+  // Same rationale as handleUpdateNotebook: sections are shown across every
+  // expanded notebook (any connection) in the sidebar tree at once.
+  const handleUpdateSection = async (connId, sectionId, newTitle, newColor) => {
     try {
-      await window.api.sections.update(sectionId, newTitle, newColor);
+      await window.api.sections.update(connId, sectionId, newTitle, newColor);
       await loadData();
       setSelectedSection(prevSection =>
-        prevSection && prevSection.id === sectionId ? { ...prevSection, title: newTitle, color: newColor } : prevSection
+        prevSection && prevSection.connId === connId && prevSection.id === sectionId
+          ? { ...prevSection, title: newTitle, color: newColor }
+          : prevSection
       );
     } catch (error) {
       console.error('Error updating section title:', error);
     }
   };
 
-  const handleDeleteSection = async (sectionId) => {
+  const handleDeleteSection = async (connId, sectionId) => {
     if (window.confirm('Are you sure you want to delete this section? All pages inside will also be deleted.')) {
       try {
-        const section = await window.api.sections.getById(sectionId);
-        const notebook = await window.api.notebooks.getById(section.notebook_id);
-        await window.api.sections.delete(sectionId);
+        const section = await window.api.sections.getById(connId, sectionId);
+        const notebook = await window.api.notebooks.getById(connId, section.notebook_id);
+        await window.api.sections.delete(connId, sectionId);
         await loadData();
-        await handleNotebookSelect(notebook);
+        await handleNotebookSelect({ ...notebook, connId });
 
-        if (selectedSection?.id === sectionId) {
+        if (selectedSection?.connId === connId && selectedSection?.id === sectionId) {
           setSelectedSection(null);
           setSelectedPage(null);
           setBlocks([]);
@@ -384,12 +446,13 @@ function App() {
     const title = await window.api.dialog.prompt('Enter page title:');
     if (title) {
       try {
-        const id = await window.api.pages.create(selectedSection.id, title);
-        const newPage = await window.api.pages.getById(id);
+        const connId = selectedSection.connId;
+        const id = await window.api.pages.create(connId, selectedSection.id, title);
+        const newPage = await window.api.pages.getById(connId, id);
         await loadData();
-        const section = await window.api.sections.getById(newPage.section_id);
-          await handleSectionSelect(section, true);
-        await handlePageSelect(newPage, true);
+        const section = await window.api.sections.getById(connId, newPage.section_id);
+        await handleSectionSelect({ ...section, connId }, true);
+        await handlePageSelect({ ...newPage, connId });
         setBlocks([]);
       } catch (error) {
         console.error('Error creating page:', error);
@@ -397,15 +460,20 @@ function App() {
     }
   };
 
+  // Pages listed/renamed/deleted from PagesList or EditorPanel always belong
+  // to selectedSection (PagesList is pre-filtered to it), so that connId is
+  // reliable context — no ambiguous cross-connection id lookup needed.
   const handleDeletePage = async (pageId) => {
     if (window.confirm('Are you sure you want to delete this page?')) {
       try {
-          const page = await window.api.pages.getById(pageId);
-        const section = await window.api.sections.getById(page.section_id);
-        await window.api.pages.delete(pageId);
+        const connId = selectedSection?.connId ?? selectedPage?.connId;
+        if (!connId) return;
+        const page = await window.api.pages.getById(connId, pageId);
+        const section = await window.api.sections.getById(connId, page.section_id);
+        await window.api.pages.delete(connId, pageId);
         await loadData();
-        await handleSectionSelect(section, true);
-        if (selectedPage?.id === pageId) {
+        await handleSectionSelect({ ...section, connId }, true);
+        if (selectedPage?.connId === connId && selectedPage?.id === pageId) {
           setSelectedPage(null);
           setBlocks([]);
         }
@@ -417,23 +485,30 @@ function App() {
 
   const handleUpdatePageTitle = async (pageId, newTitle) => {
     try {
-      await window.api.pages.update(pageId, newTitle);
+      const connId = selectedSection?.connId ?? selectedPage?.connId;
+      if (!connId) return;
+      await window.api.pages.update(connId, pageId, newTitle);
       await loadData();
       setSelectedPage(prevPage =>
-        prevPage && prevPage.id === pageId ? { ...prevPage, title: newTitle } : prevPage
+        prevPage && prevPage.connId === connId && prevPage.id === pageId
+          ? { ...prevPage, title: newTitle }
+          : prevPage
       );
     } catch (error) {
       console.error('Error updating page title:', error);
     }
   };
 
-  const handleMovePage = async (pageId, newSectionId) => {
+  // Called only from this file's own JSX (MoveModal's onMove), so the
+  // moved item's connId is always directly available — no inference needed.
+  const handleMovePage = async (connId, pageId, newSectionId) => {
     try {
-      await window.api.pages.move(pageId, newSectionId);
-      const updatedPages = await window.api.pages.getAll();
-      setPages(updatedPages);
-      if (selectedPage?.id === pageId) {
-        const movedPage = updatedPages.find(p => p.id === pageId);
+      await window.api.pages.move(connId, pageId, newSectionId);
+      const updatedPages = await window.api.pages.getAll(connId);
+      const tagged = updatedPages.map(p => ({ ...p, connId }));
+      setPages(prev => [...prev.filter(p => p.connId !== connId), ...tagged]);
+      if (selectedPage?.connId === connId && selectedPage?.id === pageId) {
+        const movedPage = tagged.find(p => p.id === pageId);
         if (movedPage) await handlePageSelect(movedPage);
       }
     } catch (error) {
@@ -441,13 +516,14 @@ function App() {
     }
   };
 
-  const handleMoveSection = async (sectionId, newNotebookId) => {
+  const handleMoveSection = async (connId, sectionId, newNotebookId) => {
     try {
-      await window.api.sections.move(sectionId, newNotebookId);
-      const updatedSections = await window.api.sections.getAll();
-      setSections(updatedSections);
-      if (selectedSection?.id === sectionId) {
-        const movedSection = updatedSections.find(s => s.id === sectionId);
+      await window.api.sections.move(connId, sectionId, newNotebookId);
+      const updatedSections = await window.api.sections.getAll(connId);
+      const tagged = updatedSections.map(s => ({ ...s, connId }));
+      setSections(prev => [...prev.filter(s => s.connId !== connId), ...tagged]);
+      if (selectedSection?.connId === connId && selectedSection?.id === sectionId) {
+        const movedSection = tagged.find(s => s.id === sectionId);
         if (movedSection) await handleSectionSelect(movedSection);
       }
     } catch (error) {
@@ -455,18 +531,16 @@ function App() {
     }
   };
 
-  const handleToggleFavorite = async (pageId) => {
+  // Receives the full page object (not just the id) so its connId travels
+  // with it — PagesList still calls this with a bare id today, which will
+  // be fixed when it is adapted to the multi-connection props.
+  const handleToggleFavorite = async (page) => {
     try {
-      await window.api.pages.toggleFavorite(pageId);
-      // Reload only data arrays, preserving the current selection
-      const [notebooksData, sectionsData, pagesData] = await Promise.all([
-        window.api.notebooks.getAll(),
-        window.api.sections.getAll(),
-        window.api.pages.getAll(),
-      ]);
-      setNotebooks(notebooksData);
-      setSections(sectionsData);
-      setPages(pagesData);
+      await window.api.pages.toggleFavorite(page.connId, page.id);
+      // Reload everything, preserving the current selection via
+      // lastActivePageKey (persisted by the effect below on every
+      // selectedPage change).
+      await loadData();
     } catch (error) {
       console.error('Error toggling favorite:', error);
     }
@@ -478,22 +552,26 @@ function App() {
       return;
     }
     try {
+      const connId = selectedPage.connId;
       const content = type === 'text' ? '# New Text Block\n\nStart typing...' : '// Write your code here';
       const language = type === 'code' ? 'javascript' : null;
       const title = null; // New blocks start with no title
-      await window.api.blocks.create(selectedPage.id, type, content, language, null, title);
-      const blocksData = await window.api.blocks.getByPage(selectedPage.id);
-      setBlocks(blocksData);
+      await window.api.blocks.create(connId, selectedPage.id, type, content, language, null, title);
+      const blocksData = await window.api.blocks.getByPage(connId, selectedPage.id);
+      setBlocks(blocksData.map(b => ({ ...b, connId })));
     } catch (error) {
       console.error('Error creating block:', error);
     }
   };
 
+  // Blocks are always scoped to selectedPage — the blocks array in state
+  // never mixes pages/connections, so selectedPage.connId is reliable here.
   const handleUpdateBlock = async (blockId, content, language, title) => {
     try {
-      await window.api.blocks.update(blockId, content, language, title);
-      const blocksData = await window.api.blocks.getByPage(selectedPage.id);
-      setBlocks(blocksData);
+      const connId = selectedPage.connId;
+      await window.api.blocks.update(connId, blockId, content, language, title);
+      const blocksData = await window.api.blocks.getByPage(connId, selectedPage.id);
+      setBlocks(blocksData.map(b => ({ ...b, connId })));
     } catch (error) {
       console.error('Error updating block:', error);
     }
@@ -502,33 +580,37 @@ function App() {
   const handleDeleteBlock = async (blockId) => {
     if (window.confirm('Are you sure you want to delete this block?')) {
       try {
-        await window.api.blocks.delete(blockId);
-        const blocksData = await window.api.blocks.getByPage(selectedPage.id);
-        setBlocks(blocksData);
+        const connId = selectedPage.connId;
+        await window.api.blocks.delete(connId, blockId);
+        const blocksData = await window.api.blocks.getByPage(connId, selectedPage.id);
+        setBlocks(blocksData.map(b => ({ ...b, connId })));
       } catch (error) {
         console.error('Error deleting block:', error);
       }
     }
   };
 
-    const handleReorderBlock = async (blockId, newPosition) => {
+  const handleReorderBlock = async (blockId, newPosition) => {
     try {
+      const connId = selectedPage.connId;
+      // blocks state is always the set for selectedPage alone (single
+      // connection), so no additional connId filter is needed here.
       const allBlocks = [...blocks].sort((a, b) => a.position - b.position);
       const currentIndex = allBlocks.findIndex(b => b.id === blockId);
 
-      if (currentIndex !== newPosition - 1 && newPosition > 0 && newPosition <= allBlocks.length) {
+      if (currentIndex !== -1 && currentIndex !== newPosition - 1 && newPosition > 0 && newPosition <= allBlocks.length) {
         const reorderedList = [...allBlocks];
         const [movedItem] = reorderedList.splice(currentIndex, 1);
         reorderedList.splice(newPosition - 1, 0, movedItem);
 
         // Update all blocks with new sequential positions
         for (let i = 0; i < reorderedList.length; i++) {
-          await window.api.blocks.reorder(reorderedList[i].id, i + 1);
+          await window.api.blocks.reorder(connId, reorderedList[i].id, i + 1);
         }
       }
 
-      const blocksData = await window.api.blocks.getByPage(selectedPage.id);
-      setBlocks(blocksData);
+      const blocksData = await window.api.blocks.getByPage(connId, selectedPage.id);
+      setBlocks(blocksData.map(b => ({ ...b, connId })));
     } catch (error) {
       console.error('Error reordering block:', error);
     }
@@ -563,11 +645,13 @@ function App() {
           notebooks={notebooks}
           sections={sections}
           pages={pages}
+          connections={connections}
           selectedNotebook={selectedNotebook}
           selectedSection={selectedSection}
           onNotebookSelect={handleNotebookSelect}
           onSectionSelect={handleSectionSelect}
           onCreateNotebook={handleCreateNotebook}
+          onNotebookCreateInConnection={handleCreateNotebook}
           onCreateSection={handleCreateSection}
           onDeleteNotebook={handleDeleteNotebook}
           onDeleteSection={handleDeleteSection}
@@ -583,7 +667,7 @@ function App() {
         />
         <div className="resizer" onMouseDown={startResizingSidebar}></div>
         <PagesList
-          pages={pages.filter(p => selectedSection ? p.section_id === selectedSection.id : false)}
+          pages={pages.filter(p => selectedSection ? (p.connId === selectedSection.connId && p.section_id === selectedSection.id) : false)}
           selectedPage={selectedPage}
           onPageSelect={handlePageSelect}
           onCreatePage={handleCreatePage}
@@ -611,6 +695,8 @@ function App() {
       </div>
       {showSearch && (
         <SearchModal
+          connections={connections}
+          defaultConnId={selectedPage?.connId ?? selectedNotebook?.connId ?? connections.find(c => c.status.state === 'connected')?.id}
           onClose={() => setShowSearch(false)}
           onNotebookSelect={(notebook) => { handleNotebookSelect(notebook); setShowSearch(false); }}
           onSectionSelect={(section) => { handleSectionSelect(section); setShowSearch(false); }}
@@ -621,11 +707,12 @@ function App() {
         <MoveModal
           mode={moveModal.mode}
           itemName={moveModal.item.title ?? moveModal.item.name}
-          notebooks={notebooks}
-          sections={sections.filter(s => moveModal.mode === 'page' ? s.id !== moveModal.item.section_id : s.notebook_id !== moveModal.item.id)}
+          notebooks={notebooks.filter(n => n.connId === moveModal.item.connId)}
+          sections={sections.filter(s => s.connId === moveModal.item.connId &&
+            (moveModal.mode === 'page' ? s.id !== moveModal.item.section_id : s.notebook_id !== moveModal.item.id))}
           onMove={(destId) => {
-            if (moveModal.mode === 'page') handleMovePage(moveModal.item.id, destId);
-            else handleMoveSection(moveModal.item.id, destId);
+            if (moveModal.mode === 'page') handleMovePage(moveModal.item.connId, moveModal.item.id, destId);
+            else handleMoveSection(moveModal.item.connId, moveModal.item.id, destId);
           }}
           onClose={() => setMoveModal(null)}
         />
@@ -634,10 +721,17 @@ function App() {
         <ExportModal
           mode={exportModal.mode}
           item={exportModal.item}
+          connId={exportModal.item.connId}
           notebooks={notebooks}
           sections={sections}
           pages={pages}
           onClose={() => setExportModal(null)}
+        />
+      )}
+      {showConnections && (
+        <ConnectionsModal
+          connections={connections}
+          onClose={() => setShowConnections(false)}
         />
       )}
     </DndProvider>
