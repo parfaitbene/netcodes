@@ -52,13 +52,31 @@ describe('settings v2', () => {
     expect(cfg.password).toBeUndefined();
   });
 
-  it('updateConnection sans mot de passe conserve l\'ancien', () => {
+  // Finding 1 : `updateConnection` sans mot de passe ne doit JAMAIS réutiliser
+  // le secret stocké vers une cible différente (host changé) — sinon un
+  // renderer compromis pourrait repointer une connexion enregistrée vers un
+  // hôte arbitraire tout en conservant le vrai mot de passe, et ça persiste.
+  it('updateConnection sans mot de passe et endpoint différent refuse (host changé)', () => {
     const { id } = settings.addConnection({
       name: 'PG', type: 'postgres', host: 'h', port: 5432, database: 'db', user: 'u', password: 'secret',
     });
-    settings.updateConnection(id, { name: 'PG2', type: 'postgres', host: 'h2', port: 5432, database: 'db', user: 'u' });
+    expect(() => settings.updateConnection(id, {
+      name: 'PG2', type: 'postgres', host: 'h2', port: 5432, database: 'db', user: 'u',
+    })).toThrow(/mot de passe/i);
+    // La tentative refusée ne doit pas avoir modifié la connexion stockée.
+    const cfg = settings.getConnectionForOpen(id);
+    expect(cfg.host).toBe('h');
+    expect(cfg.password).toBe('secret');
+  });
+
+  it('updateConnection sans mot de passe et même endpoint (édition du seul nom) conserve le mot de passe stocké', () => {
+    const { id } = settings.addConnection({
+      name: 'PG', type: 'postgres', host: 'h', port: 5432, database: 'db', user: 'u', password: 'secret',
+    });
+    settings.updateConnection(id, { name: 'PG2', type: 'postgres', host: 'h', port: 5432, database: 'db', user: 'u' });
     const cfg = settings.getConnectionForOpen(id);
     expect(cfg.name).toBe('PG2');
+    expect(cfg.host).toBe('h');
     expect(cfg.password).toBe('secret');
   });
 

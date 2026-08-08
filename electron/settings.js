@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { app, safeStorage } from 'electron';
+import { endpointMatches } from './db/test-connection.js';
 
 function getSettingsPath() {
   return path.join(app.getPath('userData'), 'settings.json');
@@ -89,7 +90,29 @@ export function updateConnection(id, cfg) {
   const s = readSettings();
   const existing = (s.connections ?? []).find(c => c.id === id);
   if (!existing) throw new Error(`Connexion inconnue : ${id}`);
-  const passwordEnc = usesPassword(cfg.type) ? (cfg.password ? encryptPassword(cfg.password) : existing.passwordEnc) : undefined;
+
+  let passwordEnc;
+  if (usesPassword(cfg.type)) {
+    if (cfg.password) {
+      passwordEnc = encryptPassword(cfg.password);
+    } else if (existing.passwordEnc) {
+      // Pas de nouveau mot de passe fourni : on ne réutilise le secret déjà
+      // stocké que si la cible (host/port/database/user, ou file) envoyée
+      // par le renderer correspond EXACTEMENT à celle enregistrée — même
+      // règle que `connections:test` (voir `endpointMatches` dans
+      // `db/test-connection.js`). `existing` porte déjà ces champs en clair
+      // (seul le mot de passe est chiffré), donc aucune décryption n'est
+      // nécessaire pour cette comparaison. Sans cette garde, un renderer
+      // compromis pourrait repointer une connexion enregistrée vers un hôte
+      // arbitraire tout en conservant le mot de passe déjà stocké — pire que
+      // le test, puisque ça se persiste (finding 1 de la revue).
+      if (!endpointMatches(cfg, existing)) {
+        throw new Error('Saisissez le mot de passe pour enregistrer cette nouvelle cible.');
+      }
+      passwordEnc = existing.passwordEnc;
+    }
+  }
+
   const stored = toStored({ ...cfg, id }, passwordEnc);
   s.connections = s.connections.map(c => (c.id === id ? stored : c));
   writeSettings(s);

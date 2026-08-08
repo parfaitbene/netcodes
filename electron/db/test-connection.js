@@ -11,6 +11,12 @@
 // `connections:list` (sans secret requis) puis demander de « tester » un id
 // réel avec un host/port arbitraire : le process main se connecterait alors
 // à un serveur attaquant avec un vrai mot de passe.
+//
+// La même règle s'applique à `connections:update` (voir
+// `electron/settings.js::updateConnection`), qui réutilise `endpointMatches`
+// ci-dessous : sans elle, un renderer compromis pourrait persister une
+// nouvelle cible (host/port/db/user) tout en conservant le mot de passe déjà
+// stocké — pire que le test, puisque ça se persiste (finding 1 de la revue).
 
 function normalize(value) {
   return typeof value === 'string' ? value.trim() : value;
@@ -22,8 +28,11 @@ function samePort(a, b) {
 
 // Détermine si l'endpoint envoyé par le renderer correspond exactement à
 // celui de la configuration stockée (seul cas où réutiliser le mot de passe
-// stocké est sûr).
-function endpointMatches(cfg, stored) {
+// stocké est sûr). Exportée pour être partagée avec `updateConnection`
+// (`electron/settings.js`), qui n'a besoin que des champs déjà en clair de
+// l'enregistrement stocké (host/port/database/user/file) — pas du mot de
+// passe déchiffré — donc du même objet `stored` que `resolveTestConfig`.
+export function endpointMatches(cfg, stored) {
   if (normalize(cfg.type) !== normalize(stored.type)) return false;
 
   if (cfg.type === 'sqlite') {
