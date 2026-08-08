@@ -164,6 +164,45 @@ describe('ConnectionManager — erreur fatale post-connexion', () => {
   });
 });
 
+// Finding 3 de la revue : open() ne se gardait contre la ré-entrance que via
+// `this.connections.has(id)`, or un open() en cours n'y figure pas encore.
+// Deux open() concurrents pour le même id construisaient donc chacun un
+// adaptateur ; le perdant n'était jamais refermé (fuite), et un close()
+// arrivant pendant un open() en cours pouvait se faire réenregistrer
+// par-dessus par l'open() qui complète ensuite.
+describe('ConnectionManager — open() concurrents (supersession)', () => {
+  it('deux open() concurrents pour le même id laissent exactement un adaptateur vivant et un statut connecté', async () => {
+    const cfg = { id: 'race-open', name: 'A', type: 'sqlite', file: ':memory:' };
+    const [a, b] = await Promise.all([manager.open(cfg), manager.open(cfg)]);
+
+    expect(manager.status('race-open').state).toBe('connected');
+    const live = manager.get('race-open');
+
+    // Exactement l'un des deux adaptateurs construits est celui enregistré ;
+    // l'autre a été supersédé et refermé par lui-même (sans être enregistré).
+    expect([a, b]).toContain(live);
+    const superseded = a === live ? b : a;
+    expect(superseded).not.toBe(live);
+    // better-sqlite3 ferme de façon synchrone : db est mis à null.
+    expect(superseded.db).toBeNull();
+    expect(live.db).not.toBeNull();
+  });
+
+  it('un close() qui survient pendant un open() en cours gagne : rien ne reste enregistré', async () => {
+    const cfg = { id: 'race-close', name: 'A', type: 'sqlite', file: ':memory:' };
+
+    const openPromise = manager.open(cfg); // démarre, pas encore enregistré
+    await manager.close('race-close');     // gagne la course : rien à fermer, statut 'closed'
+    const resolvedAdapter = await openPromise; // se termine ensuite, supersédé
+
+    expect(manager.status('race-close').state).toBe('closed');
+    expect(() => manager.get('race-close')).toThrow('Connexion indisponible');
+    // L'open() supersédé a refermé ce qu'il venait de construire au lieu de
+    // le réenregistrer par-dessus la fermeture.
+    expect(resolvedAdapter.db).toBeNull();
+  });
+});
+
 describe('normalizeConnectionError', () => {
   it('AggregateError avec erreurs enfants ECONNREFUSED → message non vide contenant le détail utile', () => {
     const child1 = Object.assign(new Error('connect ECONNREFUSED ::1:5432'), { code: 'ECONNREFUSED' });
