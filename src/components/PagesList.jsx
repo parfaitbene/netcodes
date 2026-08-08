@@ -98,7 +98,7 @@ function DraggablePageItem({
             <button
               className="btn btn-sm btn-link p-0"
               style={{ flexShrink: 0, color: !!page.favorite ? '#ffc107' : '#adb5bd' }}
-              onClick={(e) => { e.stopPropagation(); onToggleFavorite(page.id); }}
+              onClick={(e) => { e.stopPropagation(); onToggleFavorite(page); }}
               title={!!page.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
             >
               <i className={`bi bi-star${!!page.favorite ? '-fill' : ''}`}></i>
@@ -113,7 +113,7 @@ function DraggablePageItem({
               {
                 label: page.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris',
                 icon: page.favorite ? 'bi-star-fill' : 'bi-star',
-                onClick: () => onToggleFavorite(page.id),
+                onClick: () => onToggleFavorite(page),
               },
               {
                 label: 'Déplacer',

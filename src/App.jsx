@@ -100,14 +100,24 @@ function App() {
       setConnections(conns);
 
       const connected = conns.filter(c => c.status.state === 'connected');
+      // Each connection is fetched in its own try/catch: a single failing
+      // database must never abort Promise.all and blank out every OTHER
+      // connection's already-working data. A failure here yields empty
+      // arrays for that connection alone (logged), while the rest load
+      // normally.
       const perConn = await Promise.all(connected.map(async (c) => {
-        const [nbs, secs, pgs] = await Promise.all([
-          window.api.notebooks.getAll(c.id),
-          window.api.sections.getAll(c.id),
-          window.api.pages.getAll(c.id),
-        ]);
-        const tag = (rows) => rows.map(r => ({ ...r, connId: c.id }));
-        return { notebooks: tag(nbs), sections: tag(secs), pages: tag(pgs) };
+        try {
+          const [nbs, secs, pgs] = await Promise.all([
+            window.api.notebooks.getAll(c.id),
+            window.api.sections.getAll(c.id),
+            window.api.pages.getAll(c.id),
+          ]);
+          const tag = (rows) => rows.map(r => ({ ...r, connId: c.id }));
+          return { notebooks: tag(nbs), sections: tag(secs), pages: tag(pgs) };
+        } catch (error) {
+          console.error(`Error loading data for connection ${c.id}:`, error);
+          return { notebooks: [], sections: [], pages: [] };
+        }
       }));
 
       const notebooksData = perConn.flatMap(d => d.notebooks);
