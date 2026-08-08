@@ -19,11 +19,25 @@ function writeSettings(data) {
   fs.writeFileSync(getSettingsPath(), JSON.stringify(data, null, 2), 'utf-8');
 }
 
+// Seules les connexions serveur portent un mot de passe.
+function usesPassword(type) {
+  return type !== 'sqlite';
+}
+
 function encryptPassword(password) {
   if (!safeStorage.isEncryptionAvailable()) {
     throw new Error("Chiffrement indisponible sur ce système : impossible d'enregistrer un mot de passe.");
   }
   return safeStorage.encryptString(password).toString('base64');
+}
+
+function generateId(existingConnections) {
+  const taken = new Set(existingConnections.map(c => c.id));
+  let id;
+  do {
+    id = crypto.randomBytes(4).toString('hex');
+  } while (taken.has(id));
+  return id;
 }
 
 // Champs conservés tels quels dans settings.json (jamais `password` en clair).
@@ -63,8 +77,8 @@ export function getConnectionForOpen(id) {
 
 export function addConnection(cfg) {
   const s = readSettings();
-  const id = crypto.randomBytes(4).toString('hex');
-  const passwordEnc = cfg.password ? encryptPassword(cfg.password) : undefined;
+  const id = generateId(s.connections ?? []);
+  const passwordEnc = usesPassword(cfg.type) && cfg.password ? encryptPassword(cfg.password) : undefined;
   const stored = toStored({ ...cfg, id }, passwordEnc);
   s.connections = [...(s.connections ?? []), stored];
   writeSettings(s);
@@ -75,7 +89,7 @@ export function updateConnection(id, cfg) {
   const s = readSettings();
   const existing = (s.connections ?? []).find(c => c.id === id);
   if (!existing) throw new Error(`Connexion inconnue : ${id}`);
-  const passwordEnc = cfg.password ? encryptPassword(cfg.password) : existing.passwordEnc;
+  const passwordEnc = usesPassword(cfg.type) ? (cfg.password ? encryptPassword(cfg.password) : existing.passwordEnc) : undefined;
   const stored = toStored({ ...cfg, id }, passwordEnc);
   s.connections = s.connections.map(c => (c.id === id ? stored : c));
   writeSettings(s);
@@ -97,7 +111,7 @@ export function migrateLegacyDbPath() {
   }
   const file = s.dbPath || path.join(app.getPath('userData'), 'netcodes.sqlite');
   s.connections = [{
-    id: crypto.randomBytes(4).toString('hex'),
+    id: generateId(s.connections ?? []),
     name: 'Base locale',
     type: 'sqlite',
     file,

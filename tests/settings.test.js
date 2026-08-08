@@ -5,13 +5,15 @@ import path from 'path';
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'netcodes-settings-'));
 
+const mockSafeStorage = {
+  isEncryptionAvailable: () => true,
+  encryptString: vi.fn((s) => Buffer.from(`enc:${s}`)),
+  decryptString: (b) => b.toString().replace(/^enc:/, ''),
+};
+
 vi.mock('electron', () => ({
   app: { getPath: () => tmpDir },
-  safeStorage: {
-    isEncryptionAvailable: () => true,
-    encryptString: (s) => Buffer.from(`enc:${s}`),
-    decryptString: (b) => b.toString().replace(/^enc:/, ''),
-  },
+  safeStorage: mockSafeStorage,
 }));
 
 const settings = await import('../electron/settings.js');
@@ -19,6 +21,7 @@ const settingsFile = path.join(tmpDir, 'settings.json');
 
 beforeEach(() => {
   fs.rmSync(settingsFile, { force: true });
+  mockSafeStorage.encryptString.mockClear();
 });
 
 describe('settings v2', () => {
@@ -82,5 +85,24 @@ describe('settings v2', () => {
     const conns = settings.listConnections();
     expect(conns.length).toBe(1);
     expect(conns[0].file).toBe(path.join(tmpDir, 'netcodes.sqlite'));
+  });
+
+  // Finding 1: encryptString not invoked for sqlite connections
+  it('addConnection sqlite n\'invoque pas encryptString même avec un mot de passe inutile', () => {
+    settings.addConnection({ name: 'L', type: 'sqlite', file: 'D:/x.sqlite', password: 'inutile' });
+    expect(mockSafeStorage.encryptString).not.toHaveBeenCalled();
+    const stored = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
+    expect(stored.connections[0].passwordEnc).toBeUndefined();
+  });
+
+  // Finding 2: connection ids are unique
+  it('generateId garantit l\'unicité des identifiants sur 50 connexions consécutives', () => {
+    const ids = new Set();
+    for (let i = 0; i < 50; i++) {
+      const { id } = settings.addConnection({ name: `Conn${i}`, type: 'sqlite', file: `D:/${i}.sqlite` });
+      expect(ids).not.toContain(id);
+      ids.add(id);
+    }
+    expect(ids.size).toBe(50);
   });
 });
