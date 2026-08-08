@@ -39,23 +39,26 @@ function ConnectionsModal({ connections, onClose, onChanged }) {
     }
   };
 
-  // Le champ fichier SQLite ne s'édite jamais à la main (voir CLAUDE.md
-  // spec 2.0.0) : seuls ces deux dialogs natifs peuvent le renseigner.
-  const handleChooseExistingFile = async () => {
-    const r = await window.api.dialog.chooseSqliteFile();
-    if (r && !r.canceled && r.filePath) {
-      setTestResult(null);
-      setForm(f => ({ ...f, file: r.filePath }));
+  // Le champ fichier SQLite ne s'édite jamais à la main (voir la spec 2.0.0) :
+  // seuls ces deux dialogs natifs peuvent le renseigner. Un dialog annulé
+  // laisse la valeur précédente intacte.
+  const pickFile = async (open, echec) => {
+    try {
+      const r = await open();
+      if (r && !r.canceled && r.filePath) {
+        setTestResult(null);
+        setForm(f => ({ ...f, file: r.filePath }));
+      }
+    } catch (err) {
+      setTestResult({ ok: false, error: `${echec} : ${err.message}` });
     }
   };
 
-  const handleCreateNewFile = async () => {
-    const r = await window.api.dialog.createSqliteFile();
-    if (r && !r.canceled && r.filePath) {
-      setTestResult(null);
-      setForm(f => ({ ...f, file: r.filePath }));
-    }
-  };
+  const handleChooseExistingFile = () =>
+    pickFile(() => window.api.dialog.chooseSqliteFile(), 'Échec de la sélection du fichier');
+
+  const handleCreateNewFile = () =>
+    pickFile(() => window.api.dialog.createSqliteFile(), 'Échec de la création du fichier');
 
   const buildCfg = () => {
     const cfg = { name: form.name.trim(), type: form.type };
