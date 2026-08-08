@@ -1,0 +1,60 @@
+CREATE TABLE IF NOT EXISTS notebooks (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name TEXT NOT NULL,
+    icon TEXT DEFAULT '📓',
+    position INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS sections (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    notebook_id INT NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    color TEXT DEFAULT '#007bff',
+    position INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS pages (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    section_id INT NOT NULL REFERENCES sections(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    position INT NOT NULL DEFAULT 0,
+    favorite INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS blocks (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    page_id INT NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+    type TEXT NOT NULL CHECK (type IN ('text', 'code', 'attachment')),
+    title TEXT,
+    content TEXT,
+    language TEXT,
+    filename TEXT,
+    filepath TEXT,
+    position INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tags (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    color TEXT DEFAULT '#6c757d'
+);
+
+CREATE TABLE IF NOT EXISTS page_tags (
+    page_id INT NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+    tag_id INT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (page_id, tag_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sections_notebook ON sections(notebook_id);
+CREATE INDEX IF NOT EXISTS idx_pages_section ON pages(section_id);
+CREATE INDEX IF NOT EXISTS idx_blocks_page ON blocks(page_id);
+CREATE INDEX IF NOT EXISTS idx_page_tags_page ON page_tags(page_id);
+CREATE INDEX IF NOT EXISTS idx_page_tags_tag ON page_tags(tag_id);
