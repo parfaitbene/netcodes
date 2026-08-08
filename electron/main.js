@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, shell, dialog } from 'electron';
 import prompt from 'custom-electron-prompt';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -318,6 +318,33 @@ ipcMain.handle('dialog:prompt', async (event, message, defaultValue = '') => {
     mainWindow: mainWindow,
   });
   return result;
+});
+
+// Sélecteur natif exclusif pour le fichier SQLite d'une connexion : la saisie
+// libre est interdite (voir ConnectionsModal), donc ces deux dialogs sont la
+// seule façon de renseigner `file`. Jamais de throw sur annulation — le
+// renderer distingue l'annulation d'une erreur via `canceled`.
+ipcMain.handle('dialog:chooseSqliteFile', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Sélectionner une base de données SQLite',
+    filters: [{ name: 'Base de données SQLite', extensions: ['sqlite', 'db'] }],
+    properties: ['openFile'],
+  });
+  if (canceled || filePaths.length === 0) return { canceled: true };
+  return { canceled: false, filePath: filePaths[0] };
+});
+
+ipcMain.handle('dialog:createSqliteFile', async () => {
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Créer une nouvelle base de données SQLite',
+    defaultPath: 'netcodes.sqlite',
+    filters: [{ name: 'Base de données SQLite', extensions: ['sqlite'] }],
+  });
+  if (canceled || !filePath) return { canceled: true };
+  // Même règle que l'ancien flux 1.x (`handleChooseDatabase`) : si l'usager
+  // n'a pas tapé d'extension reconnue, on complète en `.sqlite`.
+  const hasKnownExt = /\.(sqlite|db)$/i.test(filePath);
+  return { canceled: false, filePath: hasKnownExt ? filePath : `${filePath}.sqlite` };
 });
 
 // IPC Handlers for Shell

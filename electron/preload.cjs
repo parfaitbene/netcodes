@@ -67,6 +67,8 @@ contextBridge.exposeInMainWorld('api', {
   // Dialog operations
   dialog: {
     prompt: (message, defaultValue) => ipcRenderer.invoke('dialog:prompt', message, defaultValue),
+    chooseSqliteFile: () => ipcRenderer.invoke('dialog:chooseSqliteFile'),
+    createSqliteFile: () => ipcRenderer.invoke('dialog:createSqliteFile'),
   },
 
   // Export operations

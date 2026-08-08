@@ -35,6 +35,24 @@ function ConnectionsModal({ connections, onClose, onChanged }) {
     }
   };
 
+  // Le champ fichier SQLite ne s'édite jamais à la main (voir CLAUDE.md
+  // spec 2.0.0) : seuls ces deux dialogs natifs peuvent le renseigner.
+  const handleChooseExistingFile = async () => {
+    const r = await window.api.dialog.chooseSqliteFile();
+    if (r && !r.canceled && r.filePath) {
+      setTestResult(null);
+      setForm(f => ({ ...f, file: r.filePath }));
+    }
+  };
+
+  const handleCreateNewFile = async () => {
+    const r = await window.api.dialog.createSqliteFile();
+    if (r && !r.canceled && r.filePath) {
+      setTestResult(null);
+      setForm(f => ({ ...f, file: r.filePath }));
+    }
+  };
+
   const buildCfg = () => {
     const cfg = { name: form.name.trim(), type: form.type };
     if (form.type === 'sqlite') {
@@ -192,8 +210,22 @@ function ConnectionsModal({ connections, onClose, onChanged }) {
               {form.type === 'sqlite' ? (
                 <div className="mb-2">
                   <label className="form-label small mb-1">Fichier</label>
-                  <input className="form-control form-control-sm" value={form.file} onChange={set('file')}
-                    placeholder="/chemin/vers/netcodes.sqlite (créé s'il n'existe pas)" />
+                  {form.file ? (
+                    <input className="form-control form-control-sm text-truncate mb-2" value={form.file}
+                      readOnly title={form.file} />
+                  ) : (
+                    <p className="text-muted small mb-2">
+                      Aucun fichier sélectionné. Choisissez une base existante ou créez-en une nouvelle.
+                    </p>
+                  )}
+                  <div className="d-flex gap-2">
+                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={handleChooseExistingFile}>
+                      <i className="bi bi-folder2-open me-1"></i>Choisir un fichier existant
+                    </button>
+                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={handleCreateNewFile}>
+                      <i className="bi bi-file-earmark-plus me-1"></i>Créer un nouveau fichier
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <>
