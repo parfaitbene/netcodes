@@ -105,6 +105,18 @@ describe('settings v2', () => {
     expect(conns[0].file).toBe(path.join(tmpDir, 'netcodes.sqlite'));
   });
 
+  // Finding 5 : `connections: []` (dernière connexion retirée par
+  // l'utilisateur) doit être distingué d'une clé absente — sinon la
+  // connexion « Base locale » ressuscite à chaque relance après suppression.
+  it('migrateLegacyDbPath avec connections: [] stocké est un no-op (ne recrée pas la connexion par défaut)', () => {
+    fs.writeFileSync(settingsFile, JSON.stringify({ connections: [] }));
+    settings.migrateLegacyDbPath();
+    expect(settings.listConnections()).toEqual([]);
+    // Idempotent.
+    settings.migrateLegacyDbPath();
+    expect(settings.listConnections()).toEqual([]);
+  });
+
   // Finding 1: encryptString not invoked for sqlite connections
   it('addConnection sqlite n\'invoque pas encryptString même avec un mot de passe inutile', () => {
     settings.addConnection({ name: 'L', type: 'sqlite', file: 'D:/x.sqlite', password: 'inutile' });

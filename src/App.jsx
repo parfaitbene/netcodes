@@ -222,15 +222,19 @@ function App() {
 
   const handleSectionSelect = async (section, handleChildSelectection = false) => {
     setSelectedSection(section);
-    const notebook = await window.api.notebooks.getById(section.connId, section.notebook_id);
-    setSelectedNotebook({ ...notebook, connId: section.connId });
+    try {
+      const notebook = await window.api.notebooks.getById(section.connId, section.notebook_id);
+      setSelectedNotebook({ ...notebook, connId: section.connId });
 
-    const sectionPages = pages.filter(p => p.connId === section.connId && p.section_id === section.id);
-    if (handleChildSelectection && sectionPages.length > 0) {
-      await handlePageSelect(sectionPages[0]);
-    } else {
-      setSelectedPage(null);
-      setBlocks([]);
+      const sectionPages = pages.filter(p => p.connId === section.connId && p.section_id === section.id);
+      if (handleChildSelectection && sectionPages.length > 0) {
+        await handlePageSelect(sectionPages[0]);
+      } else {
+        setSelectedPage(null);
+        setBlocks([]);
+      }
+    } catch (error) {
+      console.error('Error loading section:', error);
     }
   };
 

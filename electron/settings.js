@@ -128,13 +128,19 @@ export function removeConnection(id) {
 // Au premier lancement 2.0.0 : convertit l'ancien réglage mono-base.
 export function migrateLegacyDbPath() {
   const s = readSettings();
-  if (s.connections && s.connections.length > 0) {
+  // `Array.isArray`, pas une simple vérité de tableau non vide : `connections:
+  // []` est un état légitime (l'utilisateur a retiré sa dernière connexion) et
+  // doit être distingué d'une clé absente (jamais migré). Une vérité de
+  // longueur traiterait les deux cas identiquement et recréerait la
+  // connexion « Base locale » à chaque relance après suppression — un
+  // fantôme qui ressuscite (finding 5 de la revue).
+  if (Array.isArray(s.connections)) {
     if (s.dbPath) { delete s.dbPath; writeSettings(s); }
     return;
   }
   const file = s.dbPath || path.join(app.getPath('userData'), 'netcodes.sqlite');
   s.connections = [{
-    id: generateId(s.connections ?? []),
+    id: generateId([]),
     name: 'Base locale',
     type: 'sqlite',
     file,
