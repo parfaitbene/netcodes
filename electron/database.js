@@ -1,290 +1,197 @@
-import Database from 'better-sqlite3';
-import { app } from 'electron';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
+import { manager } from './db/connection-manager.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-let db = null;
-
-export function initDatabase(dbPath) {
-  if (!dbPath) {
-    dbPath = path.join(app.getPath('userData'), 'netcodes.sqlite');
-  }
-
-  db = new Database(dbPath);
-
-  // Une base corrompue peut jeter dès le premier pragma (SQLITE_CORRUPT)
-  // ou seulement être signalée par integrity_check : on unifie les deux cas.
-  let corruptionDetail = null;
-  try {
-    db.pragma('journal_mode = WAL');
-    const integrity = db.pragma('integrity_check');
-    if (!(integrity.length === 1 && integrity[0].integrity_check === 'ok')) {
-      corruptionDetail = `${integrity.length} erreur(s) d'intégrité SQLite détectée(s).`;
-    } else {
-      db.exec('REINDEX;');
-    }
-  } catch (err) {
-    corruptionDetail = err.message;
-  }
-  if (corruptionDetail) {
-    db.close();
-    db = null;
-    throw new Error(`Base de données corrompue : ${dbPath}\n${corruptionDetail}`);
-  }
-
-  // Read and execute schema
-  const schemaPath = path.join(__dirname, 'schema.sql');
-  const schema = fs.readFileSync(schemaPath, 'utf-8');
-  db.exec(schema);
-
-  return db;
-}
-
-export function getDatabase() {
-  if (!db) {
-    throw new Error('Database not initialized');
-  }
-  return db;
-}
+const db = (connId) => manager.get(connId);
 
 // Notebook operations
 export const notebookOps = {
-  getAll: () => {
-    const stmt = db.prepare('SELECT * FROM notebooks ORDER BY position');
-    return stmt.all();
-  },
+  getAll: (connId) =>
+    db(connId).all('SELECT * FROM notebooks ORDER BY position'),
 
-  getById: (id) => {
-    const stmt = db.prepare('SELECT * FROM notebooks WHERE id = ?');
-    return stmt.get(id);
-  },
+  getById: (connId, id) =>
+    db(connId).get('SELECT * FROM notebooks WHERE id = ?', [id]),
 
-  create: (name, icon = '📓') => {
-    const maxPos = db.prepare('SELECT MAX(position) as max FROM notebooks').get();
+  create: async (connId, name, icon = '📓') => {
+    const d = db(connId);
+    const maxPos = await d.get('SELECT MAX(position) as max FROM notebooks');
     const position = (maxPos.max || 0) + 1;
-    const stmt = db.prepare('INSERT INTO notebooks (name, icon, position) VALUES (?, ?, ?)');
-    const result = stmt.run(name, icon, position);
-    return result.lastInsertRowid;
+    return d.insert('INSERT INTO notebooks (name, icon, position) VALUES (?, ?, ?)', [name, icon, position]);
   },
 
-  update: (id, name, icon) => {
-    const stmt = db.prepare('UPDATE notebooks SET name = ?, icon = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-    return stmt.run(name, icon, id);
-  },
+  update: (connId, id, name, icon) =>
+    db(connId).run('UPDATE notebooks SET name = ?, icon = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [name, icon, id]),
 
-  delete: (id) => {
-    const stmt = db.prepare('DELETE FROM notebooks WHERE id = ?');
-    return stmt.run(id);
-  },
+  delete: (connId, id) =>
+    db(connId).run('DELETE FROM notebooks WHERE id = ?', [id]),
 
-  reorder: (id, newPosition) => {
-    const stmt = db.prepare('UPDATE notebooks SET position = ? WHERE id = ?');
-    return stmt.run(newPosition, id);
-  }
+  reorder: (connId, id, newPosition) =>
+    db(connId).run('UPDATE notebooks SET position = ? WHERE id = ?', [newPosition, id]),
 };
 
 // Section operations
 export const sectionOps = {
-  getAll: () => {
-    const stmt = db.prepare('SELECT * FROM sections ORDER BY notebook_id, position');
-    return stmt.all();
-  },
+  getAll: (connId) =>
+    db(connId).all('SELECT * FROM sections ORDER BY notebook_id, position'),
 
-  getByNotebook: (notebookId) => {
-    const stmt = db.prepare('SELECT * FROM sections WHERE notebook_id = ? ORDER BY position');
-    return stmt.all(notebookId);
-  },
+  getByNotebook: (connId, notebookId) =>
+    db(connId).all('SELECT * FROM sections WHERE notebook_id = ? ORDER BY position', [notebookId]),
 
-  getById: (id) => {
-    const stmt = db.prepare('SELECT * FROM sections WHERE id = ?');
-    return stmt.get(id);
-  },
+  getById: (connId, id) =>
+    db(connId).get('SELECT * FROM sections WHERE id = ?', [id]),
 
-  create: (notebookId, title, color = '#007bff') => {
-    const maxPos = db.prepare('SELECT MAX(position) as max FROM sections WHERE notebook_id = ?').get(notebookId);
+  create: async (connId, notebookId, title, color = '#007bff') => {
+    const d = db(connId);
+    const maxPos = await d.get('SELECT MAX(position) as max FROM sections WHERE notebook_id = ?', [notebookId]);
     const position = (maxPos.max || 0) + 1;
-    const stmt = db.prepare('INSERT INTO sections (notebook_id, title, color, position) VALUES (?, ?, ?, ?)');
-    const result = stmt.run(notebookId, title, color, position);
-    return result.lastInsertRowid;
+    return d.insert('INSERT INTO sections (notebook_id, title, color, position) VALUES (?, ?, ?, ?)', [notebookId, title, color, position]);
   },
 
-  update: (id, title, color) => {
-    const stmt = db.prepare('UPDATE sections SET title = ?, color = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-    return stmt.run(title, color, id);
-  },
+  update: (connId, id, title, color) =>
+    db(connId).run('UPDATE sections SET title = ?, color = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [title, color, id]),
 
-  delete: (id) => {
-    const stmt = db.prepare('DELETE FROM sections WHERE id = ?');
-    return stmt.run(id);
-  },
+  delete: (connId, id) =>
+    db(connId).run('DELETE FROM sections WHERE id = ?', [id]),
 
-  reorder: (id, newPosition) => {
-    const stmt = db.prepare('UPDATE sections SET position = ? WHERE id = ?');
-    return stmt.run(newPosition, id);
-  },
+  reorder: (connId, id, newPosition) =>
+    db(connId).run('UPDATE sections SET position = ? WHERE id = ?', [newPosition, id]),
 
-  move: (id, newNotebookId) => {
-    const maxPos = db.prepare('SELECT MAX(position) as max FROM sections WHERE notebook_id = ?').get(newNotebookId);
+  move: async (connId, id, newNotebookId) => {
+    const d = db(connId);
+    const maxPos = await d.get('SELECT MAX(position) as max FROM sections WHERE notebook_id = ?', [newNotebookId]);
     const position = (maxPos.max || 0) + 1;
-    const stmt = db.prepare('UPDATE sections SET notebook_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-    return stmt.run(newNotebookId, position, id);
-  }
+    return d.run('UPDATE sections SET notebook_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [newNotebookId, position, id]);
+  },
 };
 
 // Page operations
 export const pageOps = {
-  getAll: () => {
-    const stmt = db.prepare('SELECT * FROM pages ORDER BY section_id, position');
-    return stmt.all();
-  },
+  getAll: (connId) =>
+    db(connId).all('SELECT * FROM pages ORDER BY section_id, position'),
 
-  getBySection: (sectionId) => {
-    const stmt = db.prepare('SELECT * FROM pages WHERE section_id = ? ORDER BY position');
-    return stmt.all(sectionId);
-  },
+  getBySection: (connId, sectionId) =>
+    db(connId).all('SELECT * FROM pages WHERE section_id = ? ORDER BY position', [sectionId]),
 
-  getById: (id) => {
-    const stmt = db.prepare('SELECT * FROM pages WHERE id = ?');
-    return stmt.get(id);
-  },
+  getById: (connId, id) =>
+    db(connId).get('SELECT * FROM pages WHERE id = ?', [id]),
 
-  getFavorites: () => {
-    const stmt = db.prepare('SELECT * FROM pages WHERE favorite = 1 ORDER BY updated_at DESC');
-    return stmt.all();
-  },
+  getFavorites: (connId) =>
+    db(connId).all('SELECT * FROM pages WHERE favorite = 1 ORDER BY updated_at DESC'),
 
-  create: (sectionId, title) => {
-    const maxPos = db.prepare('SELECT MAX(position) as max FROM pages WHERE section_id = ?').get(sectionId);
+  create: async (connId, sectionId, title) => {
+    const d = db(connId);
+    const maxPos = await d.get('SELECT MAX(position) as max FROM pages WHERE section_id = ?', [sectionId]);
     const position = (maxPos.max || 0) + 1;
-    const stmt = db.prepare('INSERT INTO pages (section_id, title, position) VALUES (?, ?, ?)');
-    const result = stmt.run(sectionId, title, position);
-    return result.lastInsertRowid;
+    return d.insert('INSERT INTO pages (section_id, title, position) VALUES (?, ?, ?)', [sectionId, title, position]);
   },
 
-  update: (id, title) => {
-    const stmt = db.prepare('UPDATE pages SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-    return stmt.run(title, id);
-  },
+  update: (connId, id, title) =>
+    db(connId).run('UPDATE pages SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [title, id]),
 
-  toggleFavorite: (id) => {
-    const stmt = db.prepare('UPDATE pages SET favorite = NOT favorite, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-    return stmt.run(id);
-  },
+  // `NOT favorite` n'existe pas en PG/MySQL sur un INT : portable via 1 - favorite.
+  toggleFavorite: (connId, id) =>
+    db(connId).run('UPDATE pages SET favorite = 1 - favorite, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id]),
 
-  delete: (id) => {
-    const stmt = db.prepare('DELETE FROM pages WHERE id = ?');
-    return stmt.run(id);
-  },
+  delete: (connId, id) =>
+    db(connId).run('DELETE FROM pages WHERE id = ?', [id]),
 
-  reorder: (id, newPosition) => {
-    const stmt = db.prepare('UPDATE pages SET position = ? WHERE id = ?');
-    return stmt.run(newPosition, id);
-  },
+  reorder: (connId, id, newPosition) =>
+    db(connId).run('UPDATE pages SET position = ? WHERE id = ?', [newPosition, id]),
 
-  move: (id, newSectionId) => {
-    const maxPos = db.prepare('SELECT MAX(position) as max FROM pages WHERE section_id = ?').get(newSectionId);
+  move: async (connId, id, newSectionId) => {
+    const d = db(connId);
+    const maxPos = await d.get('SELECT MAX(position) as max FROM pages WHERE section_id = ?', [newSectionId]);
     const position = (maxPos.max || 0) + 1;
-    const stmt = db.prepare('UPDATE pages SET section_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-    return stmt.run(newSectionId, position, id);
-  }
+    return d.run('UPDATE pages SET section_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [newSectionId, position, id]);
+  },
 };
 
 // Block operations
 export const blockOps = {
-  getByPage: (pageId) => {
-    const stmt = db.prepare('SELECT id, page_id, type, title, content, language, filename, filepath, position, created_at, updated_at FROM blocks WHERE page_id = ? ORDER BY position');
-    return stmt.all(pageId);
-  },
+  getByPage: (connId, pageId) =>
+    db(connId).all(
+      'SELECT id, page_id, type, title, content, language, filename, filepath, position, created_at, updated_at FROM blocks WHERE page_id = ? ORDER BY position',
+      [pageId],
+    ),
 
-  getById: (id) => {
-    const stmt = db.prepare('SELECT id, page_id, type, title, content, language, filename, filepath, position, created_at, updated_at FROM blocks WHERE id = ?');
-    return stmt.get(id);
-  },
+  getById: (connId, id) =>
+    db(connId).get(
+      'SELECT id, page_id, type, title, content, language, filename, filepath, position, created_at, updated_at FROM blocks WHERE id = ?',
+      [id],
+    ),
 
-  create: (pageId, type, content, language = null, filename = null, title = null) => {
-    const maxPos = db.prepare('SELECT MAX(position) as max FROM blocks WHERE page_id = ?').get(pageId);
+  create: async (connId, pageId, type, content, language = null, filename = null, title = null) => {
+    const d = db(connId);
+    const maxPos = await d.get('SELECT MAX(position) as max FROM blocks WHERE page_id = ?', [pageId]);
     const position = (maxPos.max || 0) + 1;
-    const stmt = db.prepare('INSERT INTO blocks (page_id, type, content, language, filename, title, position) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    const result = stmt.run(pageId, type, content, language, filename, title, position);
-    return result.lastInsertRowid;
+    return d.insert(
+      'INSERT INTO blocks (page_id, type, content, language, filename, title, position) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [pageId, type, content, language, filename, title, position],
+    );
   },
 
-  update: (id, content, language = null, title = null) => {
-    const stmt = db.prepare('UPDATE blocks SET content = ?, language = ?, title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-    return stmt.run(content, language, title, id);
-  },
+  update: (connId, id, content, language = null, title = null) =>
+    db(connId).run('UPDATE blocks SET content = ?, language = ?, title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [content, language, title, id]),
 
-  delete: (id) => {
-    const stmt = db.prepare('DELETE FROM blocks WHERE id = ?');
-    return stmt.run(id);
-  },
+  delete: (connId, id) =>
+    db(connId).run('DELETE FROM blocks WHERE id = ?', [id]),
 
-  reorder: (id, newPosition) => {
-    const stmt = db.prepare('UPDATE blocks SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-    return stmt.run(newPosition, id);
-  }
+  reorder: (connId, id, newPosition) =>
+    db(connId).run('UPDATE blocks SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [newPosition, id]),
 };
 
 // Tag operations
 export const tagOps = {
-  getAll: () => {
-    const stmt = db.prepare('SELECT * FROM tags ORDER BY name');
-    return stmt.all();
-  },
+  getAll: (connId) =>
+    db(connId).all('SELECT * FROM tags ORDER BY name'),
 
-  getByPage: (pageId) => {
-    const stmt = db.prepare(`
+  getByPage: (connId, pageId) =>
+    db(connId).all(`
       SELECT t.* FROM tags t
       INNER JOIN page_tags pt ON t.id = pt.tag_id
       WHERE pt.page_id = ?
       ORDER BY t.name
-    `);
-    return stmt.all(pageId);
+    `, [pageId]),
+
+  create: (connId, name, color = '#6c757d') =>
+    db(connId).insert('INSERT INTO tags (name, color) VALUES (?, ?)', [name, color]),
+
+  // `INSERT OR IGNORE` est du SQLite pur ; test-puis-insert portable.
+  addToPage: async (connId, pageId, tagId) => {
+    const d = db(connId);
+    const existing = await d.get('SELECT 1 AS one FROM page_tags WHERE page_id = ? AND tag_id = ?', [pageId, tagId]);
+    if (!existing) {
+      await d.run('INSERT INTO page_tags (page_id, tag_id) VALUES (?, ?)', [pageId, tagId]);
+    }
   },
 
-  create: (name, color = '#6c757d') => {
-    const stmt = db.prepare('INSERT INTO tags (name, color) VALUES (?, ?)');
-    const result = stmt.run(name, color);
-    return result.lastInsertRowid;
-  },
-
-  addToPage: (pageId, tagId) => {
-    const stmt = db.prepare('INSERT OR IGNORE INTO page_tags (page_id, tag_id) VALUES (?, ?)');
-    return stmt.run(pageId, tagId);
-  },
-
-  removeFromPage: (pageId, tagId) => {
-    const stmt = db.prepare('DELETE FROM page_tags WHERE page_id = ? AND tag_id = ?');
-    return stmt.run(pageId, tagId);
-  }
+  removeFromPage: (connId, pageId, tagId) =>
+    db(connId).run('DELETE FROM page_tags WHERE page_id = ? AND tag_id = ?', [pageId, tagId]),
 };
 
 // Search operations
 export const searchOps = {
-  search: (query) => {
-    const term = `%${query}%`;
+  // LIKE est sensible à la casse en PG ; LOWER() partout pour un comportement
+  // homogène quel que soit le fournisseur.
+  search: async (connId, query) => {
+    const d = db(connId);
+    const term = `%${query.toLowerCase()}%`;
 
-    const notebooks = db.prepare(`
+    const notebooks = await d.all(`
       SELECT id AS notebook_id, name AS notebook_name
       FROM notebooks
-      WHERE name LIKE ?
+      WHERE LOWER(name) LIKE ?
       ORDER BY name
-    `).all(term);
+    `, [term]);
 
-    const sections = db.prepare(`
+    const sections = await d.all(`
       SELECT s.id AS section_id, s.title AS section_title,
              n.id AS notebook_id, n.name AS notebook_name
       FROM sections s
       JOIN notebooks n ON s.notebook_id = n.id
-      WHERE s.title LIKE ?
+      WHERE LOWER(s.title) LIKE ?
       ORDER BY s.title
-    `).all(term);
+    `, [term]);
 
-    const pages = db.prepare(`
+    const pages = await d.all(`
       SELECT DISTINCT
         p.id        AS page_id,
         p.title     AS page_title,
@@ -302,19 +209,12 @@ export const searchOps = {
       JOIN sections s ON p.section_id = s.id
       JOIN notebooks n ON s.notebook_id = n.id
       LEFT JOIN blocks b ON b.page_id = p.id
-      WHERE p.title LIKE ?
-         OR b.title LIKE ?
-         OR b.content LIKE ?
+      WHERE LOWER(p.title) LIKE ?
+         OR LOWER(b.title) LIKE ?
+         OR LOWER(b.content) LIKE ?
       ORDER BY p.updated_at DESC
-    `).all(term, term, term);
+    `, [term, term, term]);
 
     return { notebooks, sections, pages };
-  }
+  },
 };
-
-export function closeDatabase() {
-  if (db) {
-    db.close();
-    db = null;
-  }
-}
