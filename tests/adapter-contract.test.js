@@ -102,3 +102,36 @@ describe('PostgresAdapter connection loss', () => {
     }
   });
 });
+
+describe.skipIf(!MYSQL_URL)('MySqlAdapter.open failure handling', () => {
+  it('libère la connexion quand la connexion échoue', async () => {
+    const bad = new MySqlAdapter({ ...mysqlConfigFromUrl(MYSQL_URL), password: 'mauvais-mot-de-passe' });
+    await expect(bad.open()).rejects.toThrow();
+    expect(bad.conn).toBeNull();
+    // close() sur un adaptateur jamais ouvert ne doit pas jeter
+    await expect(bad.close()).resolves.toBeUndefined();
+  });
+});
+
+describe('MySqlAdapter connection loss', () => {
+  it("capture l'événement 'error' de la connexion au lieu de laisser Node le relancer", async () => {
+    const adapter = new MySqlAdapter({ host: 'h', port: 3306, database: 'd', user: 'u', password: 'p' });
+    // Neutralise la connexion réseau : on veut seulement le comportement du listener.
+    const mysql = (await import('mysql2/promise')).default;
+    const { EventEmitter } = await import('events');
+    const fakeConn = new EventEmitter();
+    fakeConn.end = vi.fn().mockResolvedValue(undefined);
+    const createConnSpy = vi.spyOn(mysql, 'createConnection').mockResolvedValue(fakeConn);
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await adapter.open();
+      expect(adapter.lastError).toBeNull();
+      // Perte de connexion côté serveur pendant l'inactivité.
+      adapter.conn.emit('error', new Error('connection lost'));
+      expect(adapter.lastError?.message).toBe('connection lost');
+    } finally {
+      createConnSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
+  });
+});
