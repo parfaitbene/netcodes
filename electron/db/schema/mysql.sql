@@ -1,6 +1,8 @@
+-- Texte libre en TEXT (parité sqlite/postgres). VARCHAR conservé uniquement si requis : tags.name (UNIQUE impossible sur TEXT), colonnes à DEFAULT (icon, color), jetons courts app-contrôlés (type, language).
+
 CREATE TABLE IF NOT EXISTS notebooks (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
+    name TEXT NOT NULL,
     icon VARCHAR(16) DEFAULT '📓',
     position INT NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -10,7 +12,7 @@ CREATE TABLE IF NOT EXISTS notebooks (
 CREATE TABLE IF NOT EXISTS sections (
     id INT AUTO_INCREMENT PRIMARY KEY,
     notebook_id INT NOT NULL,
-    title VARCHAR(255) NOT NULL,
+    title TEXT NOT NULL,
     color VARCHAR(16) DEFAULT '#007bff',
     position INT NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -22,7 +24,7 @@ CREATE TABLE IF NOT EXISTS sections (
 CREATE TABLE IF NOT EXISTS pages (
     id INT AUTO_INCREMENT PRIMARY KEY,
     section_id INT NOT NULL,
-    title VARCHAR(255) NOT NULL,
+    title TEXT NOT NULL,
     position INT NOT NULL DEFAULT 0,
     favorite INT DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -35,10 +37,10 @@ CREATE TABLE IF NOT EXISTS blocks (
     id INT AUTO_INCREMENT PRIMARY KEY,
     page_id INT NOT NULL,
     type VARCHAR(16) NOT NULL CHECK (type IN ('text', 'code', 'attachment')),
-    title VARCHAR(255),
+    title TEXT,
     content LONGTEXT,
     language VARCHAR(32),
-    filename VARCHAR(255),
+    filename TEXT,
     filepath TEXT,
     position INT NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -57,6 +59,7 @@ CREATE TABLE IF NOT EXISTS page_tags (
     page_id INT NOT NULL,
     tag_id INT NOT NULL,
     PRIMARY KEY (page_id, tag_id),
+    INDEX idx_page_tags_page (page_id),
     INDEX idx_page_tags_tag (tag_id),
     CONSTRAINT fk_page_tags_page FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE,
     CONSTRAINT fk_page_tags_tag FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
