@@ -23,9 +23,13 @@ function ConnectionsModal({ connections, onClose, onChanged }) {
   const [testResult, setTestResult] = useState(null);
   const [saving, setSaving] = useState(false);
   const [rowErrors, setRowErrors] = useState({}); // connId -> message (erreurs de suppression/reconnexion dans la liste)
+  // Jamais persisté entre deux ouvertures du formulaire : un mot de passe
+  // révélé sur une connexion ne doit pas rester visible en passant à une autre.
+  const [showPassword, setShowPassword] = useState(false);
 
   const startEdit = (conn) => {
     setTestResult(null);
+    setShowPassword(false);
     if (conn) {
       setEditing(conn.id);
       setForm({ ...EMPTY_FORM, ...conn, port: conn.port ?? '', password: '' });
@@ -252,9 +256,17 @@ function ConnectionsModal({ connections, onClose, onChanged }) {
                     </div>
                     <div className="col-6">
                       <label className="form-label small mb-1">Mot de passe</label>
-                      <input className="form-control form-control-sm" type="password" value={form.password}
-                        onChange={set('password')}
-                        placeholder={editing !== 'new' ? '(inchangé si vide)' : ''} />
+                      <div className="input-group input-group-sm">
+                        <input className="form-control form-control-sm" type={showPassword ? 'text' : 'password'}
+                          value={form.password} onChange={set('password')}
+                          placeholder={editing !== 'new' ? '(inchangé si vide)' : ''} />
+                        <button type="button" className="btn btn-outline-secondary"
+                          title={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                          aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                          onClick={() => setShowPassword(s => !s)}>
+                          <i className={`bi ${showPassword ? 'bi-eye-slash' : 'bi-eye'}`}></i>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </>
