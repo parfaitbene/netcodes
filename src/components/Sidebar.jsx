@@ -290,7 +290,7 @@ function DraggableNotebookItem({
   );
 }
 
-function ConnectionGroup({ conn, isCollapsed, onToggle, onCreateNotebook, onReconnect, children }) {
+function ConnectionGroup({ conn, isCollapsed, onToggle, onCreateNotebook, onReconnect, hasNotebooks, children }) {
   const state = conn.status?.state ?? 'closed';
   return (
     <div className="connection-group mb-2">
@@ -326,7 +326,15 @@ function ConnectionGroup({ conn, isCollapsed, onToggle, onCreateNotebook, onReco
           </button>
         )}
       </div>
-      {!isCollapsed && state === 'connected' && <div className="ps-2">{children}</div>}
+      {!isCollapsed && state === 'connected' && (
+        <div className="ps-2">
+          {hasNotebooks ? children : (
+            <div className="text-center text-muted py-2">
+              <p className="small mb-0">Aucun notebook dans cette base.</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -357,11 +365,22 @@ function Sidebar({
   // Keyed on `${connId}:${id}` throughout — see comment above
   // DraggableNotebookItem for why a bare notebook id is not safe here.
   const [expandedNotebooks, setExpandedNotebooks] = useState(() => {
+    const defaultExpanded = () => notebooks.map(n => `${n.connId}:${n.id}`);
     try {
       const stored = localStorage.getItem('expandedNotebooks');
-      return stored ? JSON.parse(stored) : notebooks.map(n => `${n.connId}:${n.id}`);
+      if (!stored) return defaultExpanded();
+      const parsed = JSON.parse(stored);
+      if (!Array.isArray(parsed)) return defaultExpanded();
+      // Pre-2.0 versions stored bare notebook ids (e.g. `[1, 2, 5]`), which
+      // can never match the `${connId}:${id}` keys used since the
+      // multi-database release — adopting them verbatim would silently
+      // leave every notebook collapsed forever. Keep only entries that
+      // actually look like a composite key, and fall back to the fresh
+      // default (everything expanded) if nothing survives.
+      const composite = parsed.filter(key => typeof key === 'string' && /^[^:]+:\d+$/.test(key));
+      return composite.length > 0 ? composite : defaultExpanded();
     } catch {
-      return notebooks.map(n => `${n.connId}:${n.id}`);
+      return defaultExpanded();
     }
   });
   const [editingNotebookId, setEditingNotebookId] = useState(null);
@@ -371,8 +390,10 @@ function Sidebar({
   const [showIconPicker, setShowIconPicker] = useState(null);
   const [hoveredSectionId, setHoveredSectionId] = useState(null);
   const [collapsedConns, setCollapsedConns] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('collapsedConnections')) ?? []; }
-    catch { return []; }
+    try {
+      const parsed = JSON.parse(localStorage.getItem('collapsedConnections'));
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
   });
   const knownNotebookIdsRef = useRef(new Set(notebooks.map(n => `${n.connId}:${n.id}`)));
 
@@ -402,6 +423,21 @@ function Sidebar({
   useEffect(() => {
     localStorage.setItem('collapsedConnections', JSON.stringify(collapsedConns));
   }, [collapsedConns]);
+
+  // Drop collapsed-state entries for connections that have since been
+  // deleted, so the persisted array doesn't grow forever. Guarded on a
+  // non-empty `connections` list: on mount `App` starts with `connections =
+  // []` and fills it in asynchronously, so pruning against an empty list
+  // here would wipe every persisted collapse state before it even has a
+  // chance to load.
+  useEffect(() => {
+    if (connections.length === 0) return;
+    const validIds = new Set(connections.map(c => c.id));
+    setCollapsedConns(prev => {
+      const pruned = prev.filter(id => validIds.has(id));
+      return pruned.length === prev.length ? prev : pruned;
+    });
+  }, [connections]);
 
   const toggleNotebook = (notebookKey) => {
     setExpandedNotebooks(prev =>
@@ -454,10 +490,10 @@ function Sidebar({
       </div>
 
       <div className="sidebar-body p-2">
-        {notebooks.length === 0 ? (
+        {connections.length === 0 ? (
           <div className="text-center text-muted py-4">
-            <p className="small">No notebooks yet.</p>
-            <p className="small">Click "Notebook" to create one.</p>
+            <p className="small">Aucune connexion configurée.</p>
+            <p className="small">Ouvrez « Paramètres → Connexions aux bases de données... » pour en ajouter une.</p>
           </div>
         ) : (
           connections.map(conn => {
@@ -471,6 +507,7 @@ function Sidebar({
                   prev.includes(conn.id) ? prev.filter(id => id !== conn.id) : [...prev, conn.id])}
                 onCreateNotebook={onNotebookCreateInConnection}
                 onReconnect={(id) => window.api.connections.reconnect(id)}
+                hasNotebooks={connNotebooks.length > 0}
               >
                 {connNotebooks.map((notebook, index) => {
                   const notebookKey = `${notebook.connId}:${notebook.id}`;
