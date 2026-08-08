@@ -31,14 +31,14 @@ class ConnectionManager {
   }
 
   async open(config) {
+    // Ré-ouverture : fermer l'ancienne instance d'abord.
+    if (this.connections.has(config.id)) {
+      await this.close(config.id);
+    }
     const Adapter = ADAPTERS[config.type];
     if (!Adapter) {
       this.setStatus(config.id, 'error', `Type de connexion inconnu : ${config.type}`);
       throw new Error(`Type de connexion inconnu : ${config.type}`);
-    }
-    // Ré-ouverture : fermer l'ancienne instance d'abord.
-    if (this.connections.has(config.id)) {
-      await this.close(config.id);
     }
     this.setStatus(config.id, 'connecting');
     const adapter = new Adapter(config);

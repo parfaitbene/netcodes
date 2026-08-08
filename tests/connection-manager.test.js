@@ -71,4 +71,15 @@ describe('ConnectionManager', () => {
     await expect(manager.open({ id: 'x', name: 'X', type: 'oracle' }))
       .rejects.toThrow(/Type de connexion inconnu/);
   });
+
+  it('une ré-ouverture avec un type invalide ferme quand même la connexion précédente', async () => {
+    await manager.open({ id: 'c1', name: 'A', type: 'sqlite', file: ':memory:' });
+    const previous = manager.get('c1');
+    await expect(manager.open({ id: 'c1', name: 'A', type: 'oracle' }))
+      .rejects.toThrow(/Type de connexion inconnu/);
+    // L'ancien adaptateur ne doit plus être détenu ni utilisable.
+    expect(() => manager.get('c1')).toThrow('Connexion indisponible');
+    // better-sqlite3 closes synchronously, so we check if db is null.
+    expect(previous.db).toBeNull();
+  });
 });
