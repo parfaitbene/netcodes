@@ -18,6 +18,12 @@ function SearchModal({ connections, defaultConnId, onClose, onNotebookSelect, on
   const [query, setQuery] = useState('');
   const [allResults, setAllResults] = useState({ notebooks: [], sections: [], pages: [] });
   const [loading, setLoading] = useState(false);
+  // Guards against out-of-order responses: a slow query for one connection
+  // must never overwrite the results of a newer query (same or different
+  // connection). Bumped synchronously at the start of every search — including
+  // the connection-drop cleanup below — and checked before applying a result
+  // or touching the spinner.
+  const requestIdRef = useRef(0);
 
   // Search is mono-connection: the user picks which database to search from
   // a dropdown. Only 'connected' connections are selectable — an entry in
@@ -36,9 +42,23 @@ function SearchModal({ connections, defaultConnId, onClose, onNotebookSelect, on
   // If the set of connected connections changes while the modal stays open
   // (a connection drops, or comes back) and the currently selected one is no
   // longer connected, fall back rather than keep searching a dead connId.
+  // Results tagged with the dropped connId must never linger on screen —
+  // they'd stay clickable and navigate into a database that's gone — so we
+  // either re-run the search against the new connection (query still typed,
+  // another connection available) or clear outright (nothing left to search).
   useEffect(() => {
     if (connId && !connected.some(c => c.id === connId)) {
-      setConnId(connected[0]?.id);
+      const fallbackId = connected[0]?.id;
+      setConnId(fallbackId);
+      if (fallbackId && query.trim()) {
+        handleSearch(query, fallbackId);
+      } else {
+        // Invalidate any response still in flight from the dropped
+        // connection so it can't overwrite the cleared results below.
+        requestIdRef.current += 1;
+        setAllResults({ notebooks: [], sections: [], pages: [] });
+        setLoading(false);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connections]);
@@ -69,6 +89,10 @@ function SearchModal({ connections, defaultConnId, onClose, onNotebookSelect, on
   // re-search and use the previous (stale) connection.
   const handleSearch = async (value, nextConnId = connId) => {
     setQuery(value);
+    // Claim this call's request id up front (even on the early-return path)
+    // so it also supersedes — and thus silences — any older in-flight
+    // request when the query is cleared or the connection disappears.
+    const requestId = ++requestIdRef.current;
     if (!value.trim() || !nextConnId) {
       setAllResults({ notebooks: [], sections: [], pages: [] });
       return;
@@ -76,6 +100,12 @@ function SearchModal({ connections, defaultConnId, onClose, onNotebookSelect, on
     setLoading(true);
     try {
       const { notebooks, sections, pages: rawPages } = await window.api.search.query(nextConnId, value);
+
+      // A newer search (dropdown switch, fresh keystroke, or the
+      // connection-drop cleanup above) started after this one — its result
+      // wins. Applying this stale response would let a slow query for the
+      // previous connection overwrite the current one's results.
+      if (requestId !== requestIdRef.current) return;
 
       const pagesMap = {};
       rawPages.forEach(r => {
@@ -119,9 +149,13 @@ function SearchModal({ connections, defaultConnId, onClose, onNotebookSelect, on
         pages: Object.values(pagesMap).map(p => ({ ...p, connId: nextConnId })),
       });
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error('Search error:', err);
     } finally {
-      setLoading(false);
+      // Only the latest request may touch the spinner: a stale response
+      // resolving after a newer one would otherwise clear `loading` while
+      // the newer request is still in flight.
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   };
 
@@ -274,7 +308,7 @@ function SearchModal({ connections, defaultConnId, onClose, onNotebookSelect, on
             </div>
           )}
 
-          {!loading && grouped.notebooks.length > 0 && (
+          {connected.length > 0 && !loading && grouped.notebooks.length > 0 && (
             <div>
               <div className="search-modal-group-label">Notebooks</div>
               {grouped.notebooks.map(n => (
@@ -288,7 +322,7 @@ function SearchModal({ connections, defaultConnId, onClose, onNotebookSelect, on
             </div>
           )}
 
-          {!loading && grouped.sections.length > 0 && (
+          {connected.length > 0 && !loading && grouped.sections.length > 0 && (
             <div>
               <div className="search-modal-group-label">Sections</div>
               {grouped.sections.map(s => (
@@ -303,7 +337,7 @@ function SearchModal({ connections, defaultConnId, onClose, onNotebookSelect, on
             </div>
           )}
 
-          {!loading && grouped.pages.length > 0 && (
+          {connected.length > 0 && !loading && grouped.pages.length > 0 && (
             <div>
               <div className="search-modal-group-label">Pages</div>
               {grouped.pages.map(p => {
