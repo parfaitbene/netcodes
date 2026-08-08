@@ -8,6 +8,19 @@ import SearchModal from './components/SearchModal';
 import MoveModal from './components/MoveModal';
 import ExportModal from './components/ExportModal';
 import ConnectionsModal from './components/ConnectionsModal';
+import {
+  tagWithConnId,
+  buildEntityKey,
+  matchesConnAndId,
+  findByConnAndId,
+  notebooksInConnection,
+  sectionsInConnection,
+  sectionsOfNotebook,
+  pagesOfSection,
+  replaceConnectionSlice,
+  firstConnectedConnectionId,
+  resolveLastActiveSelection,
+} from './lib/connections';
 
 function App() {
   // State for application data
@@ -112,8 +125,11 @@ function App() {
             window.api.sections.getAll(c.id),
             window.api.pages.getAll(c.id),
           ]);
-          const tag = (rows) => rows.map(r => ({ ...r, connId: c.id }));
-          return { notebooks: tag(nbs), sections: tag(secs), pages: tag(pgs) };
+          return {
+            notebooks: tagWithConnId(nbs, c.id),
+            sections: tagWithConnId(secs, c.id),
+            pages: tagWithConnId(pgs, c.id),
+          };
         } catch (error) {
           console.error(`Error loading data for connection ${c.id}:`, error);
           return { notebooks: [], sections: [], pages: [] };
@@ -129,35 +145,14 @@ function App() {
 
       // Restauration de la dernière page active : clé "<connId>:<pageId>"
       const lastKey = localStorage.getItem('lastActivePageKey');
-      const lastPage = lastKey
-        ? pagesData.find(p => `${p.connId}:${p.id}` === lastKey)
-        : null;
-      const lastSection = lastPage
-        ? sectionsData.find(s => s.connId === lastPage.connId && s.id === lastPage.section_id)
-        : null;
-      const lastNotebook = lastSection
-        ? notebooksData.find(n => n.connId === lastSection.connId && n.id === lastSection.notebook_id)
-        : null;
+      const resolved = resolveLastActiveSelection(lastKey, notebooksData, sectionsData, pagesData);
 
-      if (lastPage && lastSection && lastNotebook) {
-        setSelectedNotebook(lastNotebook);
-        setSelectedSection(lastSection);
-        setSelectedPage(lastPage);
-        const blocksData = await window.api.blocks.getByPage(lastPage.connId, lastPage.id);
-        setBlocks(blocksData.map(b => ({ ...b, connId: lastPage.connId })));
-      } else if (notebooksData.length > 0) {
-        const first = notebooksData[0];
-        setSelectedNotebook(first);
-        const firstSection = sectionsData.find(s => s.connId === first.connId && s.notebook_id === first.id);
-        if (firstSection) {
-          setSelectedSection(firstSection);
-          const firstPage = pagesData.find(p => p.connId === firstSection.connId && p.section_id === firstSection.id);
-          if (firstPage) {
-            setSelectedPage(firstPage);
-            const blocksData = await window.api.blocks.getByPage(firstPage.connId, firstPage.id);
-            setBlocks(blocksData.map(b => ({ ...b, connId: firstPage.connId })));
-          }
-        }
+      if (resolved.notebook) setSelectedNotebook(resolved.notebook);
+      if (resolved.section) setSelectedSection(resolved.section);
+      if (resolved.page) setSelectedPage(resolved.page);
+      if (resolved.page) {
+        const blocksData = await window.api.blocks.getByPage(resolved.page.connId, resolved.page.id);
+        setBlocks(tagWithConnId(blocksData, resolved.page.connId));
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -183,7 +178,7 @@ function App() {
     // to erase the remembered last-active page. Key is "<connId>:<pageId>"
     // since a bare page id is not unique across connections.
     if (selectedPage) {
-      localStorage.setItem('lastActivePageKey', `${selectedPage.connId}:${selectedPage.id}`);
+      localStorage.setItem('lastActivePageKey', buildEntityKey(selectedPage.connId, selectedPage.id));
     }
   }, [selectedPage]);
 
@@ -210,7 +205,7 @@ function App() {
   // Handlers for application logic
   const handleNotebookSelect = async (notebook, handleChildSelectection = false) => {
     setSelectedNotebook(notebook);
-    const notebookSections = sections.filter(s => s.connId === notebook.connId && s.notebook_id === notebook.id);
+    const notebookSections = sectionsOfNotebook(sections, notebook.connId, notebook.id);
     if (handleChildSelectection && notebookSections.length > 0) {
       await handleSectionSelect(notebookSections[0]);
     } else {
@@ -226,7 +221,7 @@ function App() {
       const notebook = await window.api.notebooks.getById(section.connId, section.notebook_id);
       setSelectedNotebook({ ...notebook, connId: section.connId });
 
-      const sectionPages = pages.filter(p => p.connId === section.connId && p.section_id === section.id);
+      const sectionPages = pagesOfSection(pages, section.connId, section.id);
       if (handleChildSelectection && sectionPages.length > 0) {
         await handlePageSelect(sectionPages[0]);
       } else {
@@ -246,7 +241,7 @@ function App() {
       const notebook = await window.api.notebooks.getById(page.connId, section.notebook_id);
       setSelectedNotebook({ ...notebook, connId: page.connId });
       const blocksData = await window.api.blocks.getByPage(page.connId, page.id);
-      setBlocks(blocksData.map(b => ({ ...b, connId: page.connId })));
+      setBlocks(tagWithConnId(blocksData, page.connId));
     } catch (error) {
       console.error('Error loading page:', error);
     }
@@ -261,7 +256,7 @@ function App() {
       try {
         const targetConnId = connId
           ?? selectedNotebook?.connId
-          ?? connections.find(c => c.status.state === 'connected')?.id;
+          ?? firstConnectedConnectionId(connections);
         if (!targetConnId) { alert('Aucune base connectée.'); return; }
         const idNoteBook = await window.api.notebooks.create(targetConnId, name, '📓');
         const notebook = await window.api.notebooks.getById(targetConnId, idNoteBook);
@@ -300,7 +295,7 @@ function App() {
       await window.api.notebooks.update(connId, notebookId, newName, newIcon);
       await loadData();
       setSelectedNotebook(prevNotebook =>
-        prevNotebook && prevNotebook.connId === connId && prevNotebook.id === notebookId
+        matchesConnAndId(prevNotebook, connId, notebookId)
           ? { ...prevNotebook, name: newName, icon: newIcon }
           : prevNotebook
       );
@@ -314,7 +309,7 @@ function App() {
       try {
         await window.api.notebooks.delete(connId, notebookId);
         await loadData();
-        if (selectedNotebook?.connId === connId && selectedNotebook?.id === notebookId) {
+        if (matchesConnAndId(selectedNotebook, connId, notebookId)) {
           setSelectedNotebook(null);
           setSelectedSection(null);
           setSelectedPage(null);
@@ -328,7 +323,7 @@ function App() {
 
   const handleReorderNotebook = async (connId, notebookId, newPosition) => {
     try {
-      const connNotebooks = notebooks.filter(n => n.connId === connId).sort((a, b) => a.position - b.position);
+      const connNotebooks = notebooksInConnection(notebooks, connId).sort((a, b) => a.position - b.position);
       const currentIndex = connNotebooks.findIndex(n => n.id === notebookId);
 
       if (currentIndex !== -1 && currentIndex !== newPosition && newPosition >= 0 && newPosition < connNotebooks.length) {
@@ -343,10 +338,10 @@ function App() {
       }
 
       const updatedNotebooks = await window.api.notebooks.getAll(connId);
-      const tagged = updatedNotebooks.map(n => ({ ...n, connId }));
+      const tagged = tagWithConnId(updatedNotebooks, connId);
       // Replace only this connection's slice — other connections' notebooks
       // are untouched and must not be dropped from state.
-      setNotebooks(prev => [...prev.filter(n => n.connId !== connId), ...tagged]);
+      setNotebooks(prev => replaceConnectionSlice(prev, connId, tagged));
     } catch (error) {
       console.error('Error reordering notebook:', error);
     }
@@ -354,11 +349,10 @@ function App() {
 
   const handleReorderSection = async (connId, sectionId, newPosition) => {
     try {
-      const currentSection = sections.find(s => s.connId === connId && s.id === sectionId);
+      const currentSection = findByConnAndId(sections, connId, sectionId);
       if (!currentSection) return;
 
-      const notebookSections = sections
-        .filter(s => s.connId === connId && s.notebook_id === currentSection.notebook_id)
+      const notebookSections = sectionsOfNotebook(sections, connId, currentSection.notebook_id)
         .sort((a, b) => a.position - b.position);
 
       const currentIndex = notebookSections.findIndex(s => s.id === sectionId);
@@ -375,8 +369,8 @@ function App() {
       }
 
       const updatedSections = await window.api.sections.getAll(connId);
-      const tagged = updatedSections.map(s => ({ ...s, connId }));
-      setSections(prev => [...prev.filter(s => s.connId !== connId), ...tagged]);
+      const tagged = tagWithConnId(updatedSections, connId);
+      setSections(prev => replaceConnectionSlice(prev, connId, tagged));
     } catch (error) {
       console.error('Error reordering section:', error);
     }
@@ -389,11 +383,10 @@ function App() {
     try {
       const connId = selectedSection?.connId;
       if (!connId) return;
-      const currentPage = pages.find(p => p.connId === connId && p.id === pageId);
+      const currentPage = findByConnAndId(pages, connId, pageId);
       if (!currentPage) return;
 
-      const sectionPages = pages
-        .filter(p => p.connId === connId && p.section_id === currentPage.section_id)
+      const sectionPages = pagesOfSection(pages, connId, currentPage.section_id)
         .sort((a, b) => a.position - b.position);
 
       const currentIndex = sectionPages.findIndex(p => p.id === pageId);
@@ -409,8 +402,8 @@ function App() {
       }
 
       const updatedPages = await window.api.pages.getAll(connId);
-      const tagged = updatedPages.map(p => ({ ...p, connId }));
-      setPages(prev => [...prev.filter(p => p.connId !== connId), ...tagged]);
+      const tagged = tagWithConnId(updatedPages, connId);
+      setPages(prev => replaceConnectionSlice(prev, connId, tagged));
     } catch (error) {
       console.error('Error reordering page:', error);
     }
@@ -423,7 +416,7 @@ function App() {
       await window.api.sections.update(connId, sectionId, newTitle, newColor);
       await loadData();
       setSelectedSection(prevSection =>
-        prevSection && prevSection.connId === connId && prevSection.id === sectionId
+        matchesConnAndId(prevSection, connId, sectionId)
           ? { ...prevSection, title: newTitle, color: newColor }
           : prevSection
       );
@@ -441,7 +434,7 @@ function App() {
         await loadData();
         await handleNotebookSelect({ ...notebook, connId });
 
-        if (selectedSection?.connId === connId && selectedSection?.id === sectionId) {
+        if (matchesConnAndId(selectedSection, connId, sectionId)) {
           setSelectedSection(null);
           setSelectedPage(null);
           setBlocks([]);
@@ -487,7 +480,7 @@ function App() {
         await window.api.pages.delete(connId, pageId);
         await loadData();
         await handleSectionSelect({ ...section, connId }, true);
-        if (selectedPage?.connId === connId && selectedPage?.id === pageId) {
+        if (matchesConnAndId(selectedPage, connId, pageId)) {
           setSelectedPage(null);
           setBlocks([]);
         }
@@ -504,7 +497,7 @@ function App() {
       await window.api.pages.update(connId, pageId, newTitle);
       await loadData();
       setSelectedPage(prevPage =>
-        prevPage && prevPage.connId === connId && prevPage.id === pageId
+        matchesConnAndId(prevPage, connId, pageId)
           ? { ...prevPage, title: newTitle }
           : prevPage
       );
@@ -519,9 +512,9 @@ function App() {
     try {
       await window.api.pages.move(connId, pageId, newSectionId);
       const updatedPages = await window.api.pages.getAll(connId);
-      const tagged = updatedPages.map(p => ({ ...p, connId }));
-      setPages(prev => [...prev.filter(p => p.connId !== connId), ...tagged]);
-      if (selectedPage?.connId === connId && selectedPage?.id === pageId) {
+      const tagged = tagWithConnId(updatedPages, connId);
+      setPages(prev => replaceConnectionSlice(prev, connId, tagged));
+      if (matchesConnAndId(selectedPage, connId, pageId)) {
         const movedPage = tagged.find(p => p.id === pageId);
         if (movedPage) await handlePageSelect(movedPage);
       }
@@ -534,9 +527,9 @@ function App() {
     try {
       await window.api.sections.move(connId, sectionId, newNotebookId);
       const updatedSections = await window.api.sections.getAll(connId);
-      const tagged = updatedSections.map(s => ({ ...s, connId }));
-      setSections(prev => [...prev.filter(s => s.connId !== connId), ...tagged]);
-      if (selectedSection?.connId === connId && selectedSection?.id === sectionId) {
+      const tagged = tagWithConnId(updatedSections, connId);
+      setSections(prev => replaceConnectionSlice(prev, connId, tagged));
+      if (matchesConnAndId(selectedSection, connId, sectionId)) {
         const movedSection = tagged.find(s => s.id === sectionId);
         if (movedSection) await handleSectionSelect(movedSection);
       }
@@ -572,7 +565,7 @@ function App() {
       const title = null; // New blocks start with no title
       await window.api.blocks.create(connId, selectedPage.id, type, content, language, null, title);
       const blocksData = await window.api.blocks.getByPage(connId, selectedPage.id);
-      setBlocks(blocksData.map(b => ({ ...b, connId })));
+      setBlocks(tagWithConnId(blocksData, connId));
     } catch (error) {
       console.error('Error creating block:', error);
     }
@@ -585,7 +578,7 @@ function App() {
       const connId = selectedPage.connId;
       await window.api.blocks.update(connId, blockId, content, language, title);
       const blocksData = await window.api.blocks.getByPage(connId, selectedPage.id);
-      setBlocks(blocksData.map(b => ({ ...b, connId })));
+      setBlocks(tagWithConnId(blocksData, connId));
     } catch (error) {
       console.error('Error updating block:', error);
     }
@@ -597,7 +590,7 @@ function App() {
         const connId = selectedPage.connId;
         await window.api.blocks.delete(connId, blockId);
         const blocksData = await window.api.blocks.getByPage(connId, selectedPage.id);
-        setBlocks(blocksData.map(b => ({ ...b, connId })));
+        setBlocks(tagWithConnId(blocksData, connId));
       } catch (error) {
         console.error('Error deleting block:', error);
       }
@@ -624,7 +617,7 @@ function App() {
       }
 
       const blocksData = await window.api.blocks.getByPage(connId, selectedPage.id);
-      setBlocks(blocksData.map(b => ({ ...b, connId })));
+      setBlocks(tagWithConnId(blocksData, connId));
     } catch (error) {
       console.error('Error reordering block:', error);
     }
@@ -681,7 +674,7 @@ function App() {
         />
         <div className="resizer" onMouseDown={startResizingSidebar}></div>
         <PagesList
-          pages={pages.filter(p => selectedSection ? (p.connId === selectedSection.connId && p.section_id === selectedSection.id) : false)}
+          pages={selectedSection ? pagesOfSection(pages, selectedSection.connId, selectedSection.id) : []}
           selectedPage={selectedPage}
           onPageSelect={handlePageSelect}
           onCreatePage={handleCreatePage}
@@ -710,7 +703,7 @@ function App() {
       {showSearch && (
         <SearchModal
           connections={connections}
-          defaultConnId={selectedPage?.connId ?? selectedNotebook?.connId ?? connections.find(c => c.status.state === 'connected')?.id}
+          defaultConnId={selectedPage?.connId ?? selectedNotebook?.connId ?? firstConnectedConnectionId(connections)}
           onClose={() => setShowSearch(false)}
           onNotebookSelect={(notebook) => { handleNotebookSelect(notebook); setShowSearch(false); }}
           onSectionSelect={(section) => { handleSectionSelect(section); setShowSearch(false); }}
@@ -721,9 +714,9 @@ function App() {
         <MoveModal
           mode={moveModal.mode}
           itemName={moveModal.item.title ?? moveModal.item.name}
-          notebooks={notebooks.filter(n => n.connId === moveModal.item.connId)}
-          sections={sections.filter(s => s.connId === moveModal.item.connId &&
-            (moveModal.mode === 'page' ? s.id !== moveModal.item.section_id : s.notebook_id !== moveModal.item.id))}
+          notebooks={notebooksInConnection(notebooks, moveModal.item.connId)}
+          sections={sectionsInConnection(sections, moveModal.item.connId)
+            .filter(s => moveModal.mode === 'page' ? s.id !== moveModal.item.section_id : s.notebook_id !== moveModal.item.id)}
           onMove={(destId) => {
             if (moveModal.mode === 'page') handleMovePage(moveModal.item.connId, moveModal.item.id, destId);
             else handleMoveSection(moveModal.item.connId, moveModal.item.id, destId);

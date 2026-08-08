@@ -3,6 +3,14 @@ import { createPortal } from 'react-dom';
 import { useDrag, useDrop } from 'react-dnd';
 import { ItemTypes } from '../ItemTypes';
 import DropdownMenu from './DropdownMenu';
+import {
+  buildEntityKey,
+  matchesConnAndId,
+  notebooksInConnection,
+  sectionsOfNotebook,
+  resolveExpandedNotebookKeys,
+  pruneToKnownConnections,
+} from '../lib/connections';
 
 const NOTEBOOK_ICONS = ['📓', '📕', '📗', '📘', '📙', '📔', '📒', '📑', '🗒️', '📝', '✏️', '📋', '📄', '📃', '📰', '📑'];
 
@@ -99,7 +107,7 @@ function DraggableNotebookItem({
   setShowIconPicker,
 }) {
   const ref = useRef(null);
-  const notebookKey = `${notebook.connId}:${notebook.id}`;
+  const notebookKey = buildEntityKey(notebook.connId, notebook.id);
 
   const [{ handlerId }, drop] = useDrop({
     accept: ItemTypes.NOTEBOOK,
@@ -155,7 +163,7 @@ function DraggableNotebookItem({
   drag(drop(ref));
 
   const isExpanded = expandedNotebooks.includes(notebookKey);
-  const isActive = selectedNotebook?.connId === notebook.connId && selectedNotebook?.id === notebook.id;
+  const isActive = matchesConnAndId(selectedNotebook, notebook.connId, notebook.id);
 
   return (
     <div
@@ -365,20 +373,19 @@ function Sidebar({
   // Keyed on `${connId}:${id}` throughout — see comment above
   // DraggableNotebookItem for why a bare notebook id is not safe here.
   const [expandedNotebooks, setExpandedNotebooks] = useState(() => {
-    const defaultExpanded = () => notebooks.map(n => `${n.connId}:${n.id}`);
+    const defaultExpanded = () => notebooks.map(n => buildEntityKey(n.connId, n.id));
     try {
       const stored = localStorage.getItem('expandedNotebooks');
       if (!stored) return defaultExpanded();
       const parsed = JSON.parse(stored);
-      if (!Array.isArray(parsed)) return defaultExpanded();
       // Pre-2.0 versions stored bare notebook ids (e.g. `[1, 2, 5]`), which
       // can never match the `${connId}:${id}` keys used since the
       // multi-database release — adopting them verbatim would silently
-      // leave every notebook collapsed forever. Keep only entries that
-      // actually look like a composite key, and fall back to the fresh
-      // default (everything expanded) if nothing survives.
-      const composite = parsed.filter(key => typeof key === 'string' && /^[^:]+:\d+$/.test(key));
-      return composite.length > 0 ? composite : defaultExpanded();
+      // leave every notebook collapsed forever. resolveExpandedNotebookKeys
+      // keeps only entries that actually look like a composite key, and
+      // falls back to the fresh default (everything expanded) if nothing
+      // survives.
+      return resolveExpandedNotebookKeys(parsed, defaultExpanded());
     } catch {
       return defaultExpanded();
     }
@@ -395,13 +402,13 @@ function Sidebar({
       return Array.isArray(parsed) ? parsed : [];
     } catch { return []; }
   });
-  const knownNotebookIdsRef = useRef(new Set(notebooks.map(n => `${n.connId}:${n.id}`)));
+  const knownNotebookIdsRef = useRef(new Set(notebooks.map(n => buildEntityKey(n.connId, n.id))));
 
   // Auto-expand notebooks the user just created, without re-expanding
   // notebooks the user had deliberately collapsed in a previous session
   // (those are also "missing" from expandedNotebooks, but aren't new).
   useEffect(() => {
-    const currentKeys = notebooks.map(n => `${n.connId}:${n.id}`);
+    const currentKeys = notebooks.map(n => buildEntityKey(n.connId, n.id));
     const newKeys = currentKeys.filter(key => !knownNotebookIdsRef.current.has(key));
     if (newKeys.length > 0) {
       setExpandedNotebooks(prev => [...prev, ...newKeys]);
@@ -411,7 +418,7 @@ function Sidebar({
 
   useEffect(() => {
     if (selectedNotebook) {
-      const key = `${selectedNotebook.connId}:${selectedNotebook.id}`;
+      const key = buildEntityKey(selectedNotebook.connId, selectedNotebook.id);
       setExpandedNotebooks(prev => prev.includes(key) ? prev : [...prev, key]);
     }
   }, [selectedNotebook?.connId, selectedNotebook?.id]);
@@ -432,9 +439,8 @@ function Sidebar({
   // chance to load.
   useEffect(() => {
     if (connections.length === 0) return;
-    const validIds = new Set(connections.map(c => c.id));
     setCollapsedConns(prev => {
-      const pruned = prev.filter(id => validIds.has(id));
+      const pruned = pruneToKnownConnections(prev, connections);
       return pruned.length === prev.length ? prev : pruned;
     });
   }, [connections]);
@@ -448,7 +454,7 @@ function Sidebar({
   };
 
   const moveNotebook = async (id, connId, dragIndex, hoverIndex) => {
-    const connNotebooks = notebooks.filter(n => n.connId === connId);
+    const connNotebooks = notebooksInConnection(notebooks, connId);
     const draggedNotebook = connNotebooks.find(notebook => notebook.id === id);
     if (draggedNotebook) {
       await onReorderNotebook(connId, draggedNotebook.id, hoverIndex);
@@ -497,7 +503,7 @@ function Sidebar({
           </div>
         ) : (
           connections.map(conn => {
-            const connNotebooks = notebooks.filter(n => n.connId === conn.id);
+            const connNotebooks = notebooksInConnection(notebooks, conn.id);
             return (
               <ConnectionGroup
                 key={conn.id}
@@ -510,8 +516,8 @@ function Sidebar({
                 hasNotebooks={connNotebooks.length > 0}
               >
                 {connNotebooks.map((notebook, index) => {
-                  const notebookKey = `${notebook.connId}:${notebook.id}`;
-                  const notebookSections = sections.filter(s => s.connId === notebook.connId && s.notebook_id === notebook.id);
+                  const notebookKey = buildEntityKey(notebook.connId, notebook.id);
+                  const notebookSections = sectionsOfNotebook(sections, notebook.connId, notebook.id);
                   const isExpanded = expandedNotebooks.includes(notebookKey);
 
                   return (
@@ -538,8 +544,8 @@ function Sidebar({
                       />
 
                       {isExpanded && notebookSections.map((section, sectionIndex) => {
-                        const sectionKey = `${section.connId}:${section.id}`;
-                        const isSectionActive = selectedSection?.connId === section.connId && selectedSection?.id === section.id;
+                        const sectionKey = buildEntityKey(section.connId, section.id);
+                        const isSectionActive = matchesConnAndId(selectedSection, section.connId, section.id);
                         const isEditingSection = editingSectionId === sectionKey;
                         const isHoveredSection = hoveredSectionId === sectionKey;
 
