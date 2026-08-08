@@ -26,10 +26,14 @@ export class PostgresAdapter extends DbAdapter {
       connectionTimeoutMillis: 5000,
     });
     // pg.Client émet 'error' sur perte de connexion inattendue ; sans écouteur,
-    // Node relance l'erreur et tue le process main Electron.
+    // Node relance l'erreur et tue le process main Electron. On informe
+    // aussi le manager (onFatalError) pour que le statut passe à 'error' —
+    // sinon un redémarrage serveur en cours de session laisse le statut
+    // bloqué à 'connected' indéfiniment (finding 2 de la revue).
     this.client.on('error', (err) => {
       this.lastError = err;
       console.error('Connexion PostgreSQL perdue :', err.message);
+      this.onFatalError?.(err);
     });
     try {
       await this.client.connect();

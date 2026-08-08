@@ -25,10 +25,14 @@ export class MySqlAdapter extends DbAdapter {
         enableKeepAlive: true,
       });
       // mysql2 émet 'error' sur perte de connexion inattendue ; sans écouteur,
-      // Node relance l'erreur et tue le process main Electron.
+      // Node relance l'erreur et tue le process main Electron. On informe
+      // aussi le manager (onFatalError) pour que le statut passe à 'error' —
+      // sinon un redémarrage serveur en cours de session laisse le statut
+      // bloqué à 'connected' indéfiniment (finding 2 de la revue).
       conn.on('error', (err) => {
         this.lastError = err;
         console.error('Connexion MySQL perdue :', err.message);
+        this.onFatalError?.(err);
       });
       this.conn = conn;
     } catch (err) {

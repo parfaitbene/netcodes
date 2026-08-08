@@ -316,10 +316,10 @@ function ConnectionGroup({ conn, isCollapsed, onToggle, onCreateNotebook, onReco
             <i className="bi bi-plus-circle"></i>
           </button>
         )}
-        {state === 'error' && (
+        {(state === 'error' || state === 'closed') && (
           <button
-            className="btn btn-sm btn-link p-0 text-danger"
-            title={`Reconnecter — ${conn.status.error}`}
+            className={`btn btn-sm btn-link p-0 ${state === 'error' ? 'text-danger' : 'text-secondary'}`}
+            title={state === 'error' ? `Reconnecter — ${conn.status.error}` : 'Reconnecter'}
             onClick={(e) => { e.stopPropagation(); onReconnect(conn.id); }}
           >
             <i className="bi bi-arrow-clockwise"></i>

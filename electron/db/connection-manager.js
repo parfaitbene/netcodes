@@ -70,6 +70,17 @@ class ConnectionManager {
       await adapter.open();
       await adapter.exec(loadSchema(config.type));
       this.connections.set(config.id, { adapter, config });
+      // Un serveur qui meurt en cours de session (redémarrage MySQL/PG)
+      // n'appelle jamais open()/close() : sans ce hook, le statut resterait
+      // bloqué à 'connected' indéfiniment (finding 2 de la revue). Le
+      // contrôle d'identité (`current.adapter !== adapter`) protège contre
+      // une erreur tardive d'un adaptateur déjà remplacé/fermé (reconnexion
+      // entre-temps) qui ressusciterait un statut périmé.
+      adapter.onFatalError = (err) => {
+        const current = this.connections.get(config.id);
+        if (!current || current.adapter !== adapter) return;
+        this.setStatus(config.id, 'error', normalizeConnectionError(err));
+      };
       this.setStatus(config.id, 'connected');
       return adapter;
     } catch (err) {

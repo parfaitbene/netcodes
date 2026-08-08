@@ -1,7 +1,8 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { EventEmitter } from 'events';
 import { manager, normalizeConnectionError } from '../electron/db/connection-manager.js';
 
 function tmpFile(name) {
@@ -96,6 +97,71 @@ describe('ConnectionManager', () => {
     expect(status.error).toBeTruthy();
     expect(status.error.length).toBeGreaterThan(0);
   }, 10000);
+});
+
+// Finding 2 de la revue : un serveur qui meurt en cours de session (ex.
+// redémarrage MySQL/PG) émet 'error' sur l'adaptateur mais ne repasse jamais
+// par open()/close() — sans le hook onFatalError câblé dans open(), le
+// statut restait bloqué à 'connected' indéfiniment. On simule cette perte de
+// connexion avec la même technique que tests/adapter-contract.test.js
+// (mock du driver, emit('error') a posteriori) mais au niveau du manager,
+// pour vérifier que le statut EXPOSÉ passe bien à 'error'.
+describe('ConnectionManager — erreur fatale post-connexion', () => {
+  it("une erreur fatale sur l'adaptateur MySQL fait passer le statut à 'error' avec un message non vide", async () => {
+    const mysql = (await import('mysql2/promise')).default;
+    const fakeConn = new EventEmitter();
+    fakeConn.end = vi.fn().mockResolvedValue(undefined);
+    fakeConn.query = vi.fn().mockResolvedValue([[], []]);
+    const createConnSpy = vi.spyOn(mysql, 'createConnection').mockResolvedValue(fakeConn);
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await manager.open({
+        id: 'fatal-mysql', name: 'M', type: 'mysql',
+        host: 'h', port: 3306, database: 'd', user: 'u', password: 'p',
+      });
+      expect(manager.status('fatal-mysql').state).toBe('connected');
+
+      // Perte de connexion côté serveur pendant l'inactivité.
+      fakeConn.emit('error', new Error('connexion perdue'));
+
+      const status = manager.status('fatal-mysql');
+      expect(status.state).toBe('error');
+      expect(status.error).toBeTruthy();
+      // L'adaptateur mort reste renvoyé par get() jusqu'ici ; get() doit
+      // désormais refuser puisque le statut n'est plus 'connected'.
+      expect(() => manager.get('fatal-mysql')).toThrow('Connexion indisponible');
+    } finally {
+      createConnSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("une erreur fatale sur un adaptateur déjà remplacé ne ressuscite pas un statut périmé", async () => {
+    const mysql = (await import('mysql2/promise')).default;
+    const fakeConn1 = new EventEmitter();
+    fakeConn1.end = vi.fn().mockResolvedValue(undefined);
+    fakeConn1.query = vi.fn().mockResolvedValue([[], []]);
+    const createConnSpy = vi.spyOn(mysql, 'createConnection').mockResolvedValue(fakeConn1);
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await manager.open({
+        id: 'stale-mysql', name: 'M', type: 'mysql',
+        host: 'h', port: 3306, database: 'd', user: 'u', password: 'p',
+      });
+      // Remplacée par une reconnexion réussie entre-temps (sqlite, pour ne
+      // pas dépendre d'un second mock mysql).
+      await manager.open({ id: 'stale-mysql', name: 'M2', type: 'sqlite', file: ':memory:' });
+      expect(manager.status('stale-mysql').state).toBe('connected');
+
+      // L'ancien adaptateur MySQL (déjà remplacé) émet son erreur tardive :
+      // ne doit pas écraser le statut 'connected' de la nouvelle connexion.
+      fakeConn1.emit('error', new Error('erreur tardive'));
+      expect(manager.status('stale-mysql').state).toBe('connected');
+    } finally {
+      createConnSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
+  });
 });
 
 describe('normalizeConnectionError', () => {
