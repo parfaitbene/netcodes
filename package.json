@@ -1,6 +1,6 @@
 {
   "name": "netcodes",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Cross-platform desktop app for storing and organizing code snippets",
   "main": "electron/main.js",
   "type": "module",
