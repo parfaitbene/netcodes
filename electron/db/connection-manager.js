@@ -7,7 +7,7 @@ import { PostgresAdapter } from './postgres-adapter.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const ADAPTERS = {
+export const ADAPTERS = {
   sqlite: SqliteAdapter,
   mysql: MySqlAdapter,
   postgres: PostgresAdapter,

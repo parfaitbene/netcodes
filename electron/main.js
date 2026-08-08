@@ -10,22 +10,26 @@ import {
   tagOps,
   searchOps,
 } from './database.js';
-import { manager } from './db/connection-manager.js';
+import { manager, ADAPTERS } from './db/connection-manager.js';
 import {
   listConnections, getConnectionForOpen, addConnection, updateConnection,
   removeConnection, migrateLegacyDbPath,
 } from './settings.js';
 import { exportOps } from './export.js';
-import { SqliteAdapter } from './db/sqlite-adapter.js';
-import { MySqlAdapter } from './db/mysql-adapter.js';
-import { PostgresAdapter } from './db/postgres-adapter.js';
-
-const TEST_ADAPTERS = { sqlite: SqliteAdapter, mysql: MySqlAdapter, postgres: PostgresAdapter };
+import { resolveTestConfig } from './db/test-connection.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow;
+
+// Envoi défensif vers le renderer : évite d'écrire deux fois la même garde
+// `mainWindow && !mainWindow.isDestroyed()` (statut de connexion, menu...).
+function sendToRenderer(channel, payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, payload);
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -113,7 +117,7 @@ function setupApplicationMenu() {
       submenu: [
         {
           label: 'Connexions aux bases de données...',
-          click: () => mainWindow?.webContents.send('ui:open-connections'),
+          click: () => sendToRenderer('ui:open-connections'),
         },
       ],
     },
@@ -137,9 +141,7 @@ app.whenReady().then(async () => {
   migrateLegacyDbPath();
 
   manager.onStatusChange = (id, status) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('connections:status-changed', { id, ...status });
-    }
+    sendToRenderer('connections:status-changed', { id, ...status });
   };
 
   setupApplicationMenu();
@@ -244,13 +246,24 @@ ipcMain.handle('connections:list', () =>
 
 ipcMain.handle('connections:add', async (_, cfg) => {
   const saved = addConnection(cfg);
-  manager.open(getConnectionForOpen(saved.id)).catch(() => {});
+  // getConnectionForOpen peut jeter de façon synchrone (ex. chiffrement
+  // indisponible) ; sans garde, ça rejetterait ce handler après coup, alors
+  // que la config est déjà persistée. Même garde que la boucle de démarrage.
+  try {
+    manager.open(getConnectionForOpen(saved.id)).catch(() => {});
+  } catch (err) {
+    console.error(`Connexion ${saved.id} illisible :`, err);
+  }
   return saved;
 });
 
 ipcMain.handle('connections:update', async (_, id, cfg) => {
   const saved = updateConnection(id, cfg);
-  manager.open(getConnectionForOpen(id)).catch(() => {});
+  try {
+    manager.open(getConnectionForOpen(id)).catch(() => {});
+  } catch (err) {
+    console.error(`Connexion ${id} illisible :`, err);
+  }
   return saved;
 });
 
@@ -260,21 +273,29 @@ ipcMain.handle('connections:remove', async (_, id) => {
 });
 
 ipcMain.handle('connections:test', async (_, cfg) => {
-  // Connexion éphémère : jamais enregistrée. Pour un update sans nouveau
-  // mot de passe, cfg.id permet de reprendre le mot de passe stocké.
-  const Adapter = TEST_ADAPTERS[cfg.type];
-  if (!Adapter) return { ok: false, error: `Type inconnu : ${cfg.type}` };
-  let password = cfg.password;
-  if (!password && cfg.id) {
-    try { password = getConnectionForOpen(cfg.id).password; } catch { /* config neuve */ }
-  }
-  const adapter = new Adapter({ ...cfg, password });
+  // Connexion éphémère : jamais enregistrée. Un mot de passe résolu depuis le
+  // stockage local ne doit JAMAIS être envoyé vers une cible choisie par le
+  // renderer (host/port/database/user viennent intégralement de `cfg`, non
+  // fiable) : sinon un renderer compromis pourrait énumérer un id réel via
+  // `connections:list` puis demander de le « tester » vers un serveur
+  // attaquant, et le process main s'y connecterait avec le vrai mot de
+  // passe. `resolveTestConfig` n'autorise la réutilisation du secret stocké
+  // que si l'endpoint testé correspond exactement à celui enregistré.
+  const resolved = resolveTestConfig(cfg, getConnectionForOpen);
+  if (!resolved.ok) return resolved;
+  const { config } = resolved;
+
+  const Adapter = ADAPTERS[config.type];
+  if (!Adapter) return { ok: false, error: `Type inconnu : ${config.type}` };
+
+  let adapter;
   try {
+    adapter = new Adapter(config);
     await adapter.open();
     await adapter.close();
     return { ok: true };
   } catch (err) {
-    await adapter.close().catch(() => {});
+    if (adapter) await adapter.close().catch(() => {});
     return { ok: false, error: err.message };
   }
 });
