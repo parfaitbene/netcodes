@@ -1,19 +1,29 @@
 import React, { useState } from 'react';
 
-function ExportModal({ mode, item, notebooks, sections, pages, onClose }) {
+function ExportModal({ mode, item, connId, notebooks, sections, pages, onClose }) {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(null);
   const [format, setFormat] = useState('docx');
   const [blockLayout, setBlockLayout] = useState('merged');
 
+  // App still passes the full multi-connection notebooks/sections/pages
+  // arrays (they're also used elsewhere for Sidebar/PagesList). Ids are only
+  // unique WITHIN a connection, so every ancestry lookup below (section of a
+  // page, notebook of a section, etc.) must be scoped to `connId` — matching
+  // on the bare id alone could resolve to a same-id row in a different
+  // connection.
+  const connNotebooks = notebooks.filter(n => n.connId === connId);
+  const connSections = sections.filter(s => s.connId === connId);
+  const connPages = pages.filter(p => p.connId === connId);
+
   const handleExport = async () => {
     setLoading(true);
     try {
       let result;
-      if (mode === 'page') result = await window.api.export.page(item.id, format, blockLayout);
-      else if (mode === 'section') result = await window.api.export.section(item.id, format, blockLayout);
-      else if (mode === 'block') result = await window.api.export.block(item.id, format);
-      else result = await window.api.export.notebook(item.id, format, blockLayout);
+      if (mode === 'page') result = await window.api.export.page(connId, item.id, format, blockLayout);
+      else if (mode === 'section') result = await window.api.export.section(connId, item.id, format, blockLayout);
+      else if (mode === 'block') result = await window.api.export.block(connId, item.id, format);
+      else result = await window.api.export.notebook(connId, item.id, format, blockLayout);
       console.log('[ExportModal] result:', result);
       setDone(result);
     } catch (err) {
@@ -35,23 +45,23 @@ function ExportModal({ mode, item, notebooks, sections, pages, onClose }) {
 
   const scope = (() => {
     if (mode === 'page') {
-      const sec = sections.find(s => s.id === item.section_id);
-      const nb = notebooks.find(n => n.id === sec?.notebook_id);
+      const sec = connSections.find(s => s.id === item.section_id);
+      const nb = connNotebooks.find(n => n.id === sec?.notebook_id);
       return `${nb?.name ?? ''} › ${sec?.title ?? ''}`;
     }
     if (mode === 'section') {
-      const nb = notebooks.find(n => n.id === item.notebook_id);
-      const pageCount = pages.filter(p => p.section_id === item.id).length;
+      const nb = connNotebooks.find(n => n.id === item.notebook_id);
+      const pageCount = connPages.filter(p => p.section_id === item.id).length;
       return `${nb?.name ?? ''} — ${pageCount} page${pageCount !== 1 ? 's' : ''}`;
     }
     if (mode === 'block') {
-      const page = pages.find(p => p.id === item.page_id);
-      const sec = sections.find(s => s.id === page?.section_id);
-      const nb = notebooks.find(n => n.id === sec?.notebook_id);
+      const page = connPages.find(p => p.id === item.page_id);
+      const sec = connSections.find(s => s.id === page?.section_id);
+      const nb = connNotebooks.find(n => n.id === sec?.notebook_id);
       return `${nb?.name ?? ''} › ${sec?.title ?? ''} › ${page?.title ?? ''}`;
     }
-    const secCount = sections.filter(s => s.notebook_id === item.id).length;
-    const pageCount = pages.filter(p => sections.some(s => s.notebook_id === item.id && s.id === p.section_id)).length;
+    const secCount = connSections.filter(s => s.notebook_id === item.id).length;
+    const pageCount = connPages.filter(p => connSections.some(s => s.notebook_id === item.id && s.id === p.section_id)).length;
     return `${secCount} section${secCount !== 1 ? 's' : ''}, ${pageCount} page${pageCount !== 1 ? 's' : ''}`;
   })();
 

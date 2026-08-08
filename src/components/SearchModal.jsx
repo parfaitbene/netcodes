@@ -14,10 +14,34 @@ const LANGUAGE_LABELS = {
   sql: 'SQL', markdown: 'Markdown', shell: 'Shell', plaintext: 'Plain Text',
 };
 
-function SearchModal({ onClose, onNotebookSelect, onSectionSelect, onPageSelect }) {
+function SearchModal({ connections, defaultConnId, onClose, onNotebookSelect, onSectionSelect, onPageSelect }) {
   const [query, setQuery] = useState('');
   const [allResults, setAllResults] = useState({ notebooks: [], sections: [], pages: [] });
   const [loading, setLoading] = useState(false);
+
+  // Search is mono-connection: the user picks which database to search from
+  // a dropdown. Only 'connected' connections are selectable — an entry in
+  // 'error'/'closed' state would produce a rejected IPC call. `defaultConnId`
+  // may be undefined or stale (e.g. it named a connection that just dropped),
+  // so we fall back to the first connected one; when none are connected the
+  // value stays undefined and the modal shows an explanatory message instead
+  // of a search box.
+  const connected = connections.filter(c => c.status.state === 'connected');
+  const [connId, setConnId] = useState(() => (
+    defaultConnId && connected.some(c => c.id === defaultConnId)
+      ? defaultConnId
+      : connected[0]?.id
+  ));
+
+  // If the set of connected connections changes while the modal stays open
+  // (a connection drops, or comes back) and the currently selected one is no
+  // longer connected, fall back rather than keep searching a dead connId.
+  useEffect(() => {
+    if (connId && !connected.some(c => c.id === connId)) {
+      setConnId(connected[0]?.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connections]);
 
   // Filters
   const [filterFavorites, setFilterFavorites] = useState(false);
@@ -39,15 +63,19 @@ function SearchModal({ onClose, onNotebookSelect, onSectionSelect, onPageSelect 
     return () => window.removeEventListener('keydown', handleKey);
   }, [onClose]);
 
-  const handleSearch = async (value) => {
+  // `nextConnId` defaults to the current `connId` state, but callers that
+  // just changed the dropdown must pass the new value explicitly — reading
+  // `connId` from state here would race the setConnId() that triggered the
+  // re-search and use the previous (stale) connection.
+  const handleSearch = async (value, nextConnId = connId) => {
     setQuery(value);
-    if (!value.trim()) {
+    if (!value.trim() || !nextConnId) {
       setAllResults({ notebooks: [], sections: [], pages: [] });
       return;
     }
     setLoading(true);
     try {
-      const { notebooks, sections, pages: rawPages } = await window.api.search.query(value);
+      const { notebooks, sections, pages: rawPages } = await window.api.search.query(nextConnId, value);
 
       const pagesMap = {};
       rawPages.forEach(r => {
@@ -75,15 +103,20 @@ function SearchModal({ onClose, onNotebookSelect, onSectionSelect, onPageSelect 
         }
       });
 
+      // Search results come back as raw rows with no connection information.
+      // Every notebook/section/page object handed to App's onXSelect
+      // handlers must carry connId, or App will navigate into the wrong
+      // database (ids collide across connections).
       setAllResults({
-        notebooks: notebooks.map(n => ({ id: n.notebook_id, name: n.notebook_name })),
+        notebooks: notebooks.map(n => ({ id: n.notebook_id, name: n.notebook_name, connId: nextConnId })),
         sections: sections.map(s => ({
           id: s.section_id,
           title: s.section_title,
           notebook_id: s.notebook_id,
           notebook_name: s.notebook_name,
+          connId: nextConnId,
         })),
-        pages: Object.values(pagesMap),
+        pages: Object.values(pagesMap).map(p => ({ ...p, connId: nextConnId })),
       });
     } catch (err) {
       console.error('Search error:', err);
@@ -130,19 +163,37 @@ function SearchModal({ onClose, onNotebookSelect, onSectionSelect, onPageSelect 
             ref={inputRef}
             type="text"
             className="search-modal-input"
-            placeholder="Rechercher notebooks, sections, pages et blocs..."
+            placeholder={connected.length === 0 ? 'Aucune connexion active' : 'Rechercher notebooks, sections, pages et blocs...'}
             value={query}
+            disabled={connected.length === 0}
             onChange={(e) => handleSearch(e.target.value)}
           />
           {query && (
-            <button className="search-modal-clear" onClick={() => { setQuery(''); setAllResults({ notebooks: [], sections: [], pages: [] }); inputRef.current?.focus(); }}>
+            <button className="search-modal-clear" onClick={() => { handleSearch(''); inputRef.current?.focus(); }}>
               <i className="bi bi-x-lg"></i>
             </button>
           )}
         </div>
 
-        {/* Filter bar */}
+        {/* Filter bar — hidden when there is no connected database to search */}
+        {connected.length > 0 && (
         <div style={{ padding: '8px 12px', borderBottom: '1px solid #dee2e6', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', background: '#f8f9fa' }}>
+          <select
+            className="form-select form-select-sm"
+            style={{ width: 'auto' }}
+            value={connId ?? ''}
+            onChange={(e) => {
+              const nextConnId = e.target.value;
+              setConnId(nextConnId);
+              handleSearch(query, nextConnId);
+            }}
+            title="Base de données"
+          >
+            {connected.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+
           <button
             className={`btn btn-sm ${filterFavorites ? 'btn-warning' : 'btn-outline-secondary'}`}
             onClick={() => setFilterFavorites(prev => !prev)}
@@ -197,20 +248,27 @@ function SearchModal({ onClose, onNotebookSelect, onSectionSelect, onPageSelect 
             </button>
           )}
         </div>
+        )}
 
         <div className="search-modal-body">
-          {loading && (
+          {connected.length === 0 && (
+            <div className="search-modal-empty">
+              <i className="bi bi-plug me-2"></i>
+              Aucune base de données connectée. Connectez une base pour effectuer une recherche.
+            </div>
+          )}
+          {connected.length > 0 && loading && (
             <div className="search-modal-empty">
               <div className="spinner-border spinner-border-sm text-secondary" role="status"></div>
             </div>
           )}
-          {!loading && query && total === 0 && (
+          {connected.length > 0 && !loading && query && total === 0 && (
             <div className="search-modal-empty">
               <i className="bi bi-search me-2"></i>
               Aucun résultat {hasActiveFilter ? 'avec ces filtres' : ''} pour <strong>"{query}"</strong>
             </div>
           )}
-          {!loading && !query && (
+          {connected.length > 0 && !loading && !query && (
             <div className="search-modal-empty" style={{ fontSize: '0.85rem' }}>
               Tapez pour rechercher…
             </div>
