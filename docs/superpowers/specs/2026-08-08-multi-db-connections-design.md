@@ -123,11 +123,24 @@ les UPDATE) — aucun trigger.
 
 | Canal | Rôle |
 |---|---|
-| `connections:list` | Métadonnées d'affichage : `{id, name, type, status}` — ni host, ni user, ni mot de passe |
+| `connections:list` | Config publique + statut : `{id, name, type, file? \| host?/port?/database?/user?, status}` — **jamais** `password` ni `passwordEnc` |
 | `connections:add` / `update` / `remove` | CRUD de la config ; chiffrement du mot de passe côté main |
 | `connections:test` | Essai de connexion avec une config fournie, sans enregistrement |
 | `connections:reconnect` | Ré-ouverture d'une connexion en erreur |
 | `connections:status-changed` | Push main → renderer sur transition d'état |
+
+> `connections:list` renvoie les champs d'endpoint (host, port, base, user,
+> fichier) parce que le formulaire d'édition du modal doit les pré-remplir. Le
+> secret, lui, ne franchit jamais la frontière : il n'existe en clair que dans
+> le process main, le temps de le passer au driver.
+
+**Règle de sécurité — jamais un secret stocké vers une cible choisie par le
+renderer.** `connections:test` et `connections:update` refusent de réutiliser
+le mot de passe enregistré dès que l'endpoint fourni diffère de l'endpoint
+stocké : sans cette règle, un renderer compromis ferait ouvrir une connexion
+vers un serveur qu'il contrôle avec un vrai credential, qui serait capturé en
+clair. Changer de cible impose donc de ressaisir le mot de passe. Comparaison
+d'endpoint partagée par les deux chemins (`electron/db/test-connection.js`).
 
 - `preload.cjs` : miroir 1:1 des canaux, plus `onConnectionStatusChanged(cb)`.
 
@@ -145,10 +158,13 @@ les UPDATE) — aucun trigger.
   bouton « Tester la connexion », suppression avec confirmation (retire la
   connexion, ne touche jamais aux données). Ouverture/fermeture à chaud, sans
   redémarrage de l'application.
+  Le fichier SQLite se choisit **exclusivement** par le sélecteur natif de l'OS
+  (Explorateur / Finder), jamais par saisie ou collage libre : sélection d'un
+  fichier existant ou création d'un nouveau. Le chemin ne s'affiche qu'une fois
+  le fichier choisi. Le mot de passe dispose d'un bouton afficher/masquer.
 - **SearchModal** : sélecteur de connexion en tête des filtres, défaut =
   connexion de la sélection courante.
 - **MoveModal** : cibles restreintes à la connexion de l'élément déplacé.
-- **Favoris** : par connexion, affichés sous leur groupe respectif.
 
 ### Erreurs et résilience
 
@@ -173,7 +189,15 @@ les UPDATE) — aucun trigger.
 ## Hors périmètre v1
 
 - Copie/déplacement/migration de données entre connexions (cible 2.1).
-- Recherche multi-bases simultanée.
+- Recherche multi-bases simultanée : la recherche porte sur une base à la fois,
+  choisie dans le sélecteur du modal de recherche.
+- **Favoris par connexion** : abandonné. Aucune vue « favoris » n'existait en
+  1.x et la recherche mono-base couvre le besoin ; `pages.favorite` reste
+  stocké et affiché sur chaque page, sans panneau dédié.
+- **`REINDEX` au démarrage** : abandonné. Reconstruire tous les index à chaque
+  lancement coûte cher pour un bénéfice faible, et la 2.0.0 est plus sûre sur
+  ce terrain que la 1.x — `SqliteAdapter.open()` inspecte réellement le
+  résultat de `integrity_check`, que la 1.x calculait puis jetait.
 - Pool de connexions avancé, SSL/TLS paramétrable MySQL/PG (défauts des
   drivers utilisés tels quels).
 

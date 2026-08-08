@@ -1,5 +1,12 @@
 # Multi-Database Connections (2.0.0) Implementation Plan
 
+> **Statut : exécuté.** Ce plan est un document historique. Plusieurs écarts
+> délibérés ont été décidés pendant l'exécution (règle de sécurité sur la
+> réutilisation d'un mot de passe stocké, sélecteur de fichier natif au lieu
+> d'une saisie libre, abandon des favoris par connexion et du `REINDEX` au
+> démarrage). **La spec fait foi**, pas ce plan :
+> `docs/superpowers/specs/2026-08-08-multi-db-connections-design.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** NetCodes se connecte simultanément à plusieurs bases (SQLite, MySQL, PostgreSQL), chacune affichée comme groupe racine dans la sidebar, avec reconnexion automatique au démarrage.
@@ -2136,8 +2143,11 @@ function ConnectionsModal({ connections, onClose, onChanged }) {
               {form.type === 'sqlite' ? (
                 <div className="mb-2">
                   <label className="form-label small mb-1">Fichier</label>
-                  <input className="form-control form-control-sm" value={form.file} onChange={set('file')}
-                    placeholder="/chemin/vers/netcodes.sqlite (créé s'il n'existe pas)" />
+                  {/* Le chemin se choisit par le sélecteur natif de l'OS, jamais
+                      par saisie libre, et ne s'affiche qu'une fois le fichier
+                      choisi. Voir la section « Modal Connexions » de la spec. */}
+                  <input className="form-control form-control-sm" value={form.file} readOnly
+                    placeholder="Aucun fichier sélectionné" />
                 </div>
               ) : (
                 <>
