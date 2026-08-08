@@ -41,3 +41,15 @@ adapterContract('postgres', {
     qty INT DEFAULT 0
   )`,
 });
+
+import { describe, it, expect } from 'vitest';
+
+describe.skipIf(!PG_URL)('PostgresAdapter.open failure handling', () => {
+  it('libère le client quand la connexion échoue', async () => {
+    const bad = new PostgresAdapter({ ...pgConfigFromUrl(PG_URL), password: 'mauvais-mot-de-passe' });
+    await expect(bad.open()).rejects.toThrow();
+    expect(bad.client).toBeNull();
+    // close() sur un adaptateur jamais ouvert ne doit pas jeter
+    await expect(bad.close()).resolves.toBeUndefined();
+  });
+});

@@ -13,6 +13,7 @@ export class PostgresAdapter extends DbAdapter {
     super('postgres');
     this.config = config;
     this.client = null;
+    this.lastError = null;
   }
 
   async open() {
@@ -24,7 +25,18 @@ export class PostgresAdapter extends DbAdapter {
       password: this.config.password,
       connectionTimeoutMillis: 5000,
     });
-    await this.client.connect();
+    // pg.Client émet 'error' sur perte de connexion inattendue ; sans écouteur,
+    // Node relance l'erreur et tue le process main Electron.
+    this.client.on('error', (err) => {
+      this.lastError = err;
+      console.error('Connexion PostgreSQL perdue :', err.message);
+    });
+    try {
+      await this.client.connect();
+    } catch (err) {
+      this.client = null;
+      throw err;
+    }
   }
 
   async all(sql, params = []) {
