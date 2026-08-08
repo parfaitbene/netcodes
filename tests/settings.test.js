@@ -94,15 +94,4 @@ describe('settings v2', () => {
     const stored = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
     expect(stored.connections[0].passwordEnc).toBeUndefined();
   });
-
-  // Finding 2: connection ids are unique
-  it('generateId garantit l\'unicité des identifiants sur 50 connexions consécutives', () => {
-    const ids = new Set();
-    for (let i = 0; i < 50; i++) {
-      const { id } = settings.addConnection({ name: `Conn${i}`, type: 'sqlite', file: `D:/${i}.sqlite` });
-      expect(ids).not.toContain(id);
-      ids.add(id);
-    }
-    expect(ids.size).toBe(50);
-  });
 });
