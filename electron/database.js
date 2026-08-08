@@ -15,9 +15,26 @@ export function initDatabase(dbPath) {
   }
 
   db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('integrity_check');
-  db.exec('REINDEX;');
+
+  // Une base corrompue peut jeter dès le premier pragma (SQLITE_CORRUPT)
+  // ou seulement être signalée par integrity_check : on unifie les deux cas.
+  let corruptionDetail = null;
+  try {
+    db.pragma('journal_mode = WAL');
+    const integrity = db.pragma('integrity_check');
+    if (!(integrity.length === 1 && integrity[0].integrity_check === 'ok')) {
+      corruptionDetail = `${integrity.length} erreur(s) d'intégrité SQLite détectée(s).`;
+    } else {
+      db.exec('REINDEX;');
+    }
+  } catch (err) {
+    corruptionDetail = err.message;
+  }
+  if (corruptionDetail) {
+    db.close();
+    db = null;
+    throw new Error(`Base de données corrompue : ${dbPath}\n${corruptionDetail}`);
+  }
 
   // Read and execute schema
   const schemaPath = path.join(__dirname, 'schema.sql');

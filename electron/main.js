@@ -207,6 +207,13 @@ app.whenReady().then(() => {
     initDatabase(savedDbPath);
   } catch (err) {
     console.error('Database init failed:', err);
+    dialog.showErrorBox(
+      'NetCodes — Base de données inaccessible',
+      `${err.message}\n\n` +
+      `L'application va s'ouvrir sans données. Utilisez le menu ` +
+      `« Paramètres → Choisir la base de données... » pour sélectionner ` +
+      `un fichier valide ou une sauvegarde.`
+    );
   }
 
   setupApplicationMenu();
