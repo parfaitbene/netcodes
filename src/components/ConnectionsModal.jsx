@@ -4,12 +4,25 @@ const EMPTY_FORM = { name: '', type: 'sqlite', file: '', host: '', port: '', dat
 const DEFAULT_PORTS = { mysql: 3306, postgres: 5432 };
 const STATE_LABELS = { connected: 'Connectée', connecting: 'Connexion…', error: 'Erreur', closed: 'Fermée' };
 const STATE_COLORS = { connected: 'success', connecting: 'warning', error: 'danger', closed: 'secondary' };
+const PORT_MIN = 1;
+const PORT_MAX = 65535;
+
+// Port optionnel : une valeur vide est valide (le port par défaut du type
+// s'applique). Quand une valeur est fournie, elle doit être un entier dans
+// la plage TCP valide — sinon `Number(...) || DEFAULT_PORTS[...]` de
+// `buildCfg` accepterait à tort des valeurs négatives/décimales (truthy).
+function isValidPort(value) {
+  if (value === '' || value === null || value === undefined) return true;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= PORT_MIN && n <= PORT_MAX;
+}
 
 function ConnectionsModal({ connections, onClose, onChanged }) {
   const [editing, setEditing] = useState(null); // null | 'new' | connId
   const [form, setForm] = useState(EMPTY_FORM);
   const [testResult, setTestResult] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [rowErrors, setRowErrors] = useState({}); // connId -> message (erreurs de suppression/reconnexion dans la liste)
 
   const startEdit = (conn) => {
     setTestResult(null);
@@ -39,6 +52,7 @@ function ConnectionsModal({ connections, onClose, onChanged }) {
   const isValid = () => {
     if (!form.name.trim()) return false;
     if (form.type === 'sqlite') return Boolean(form.file.trim());
+    if (!isValidPort(form.port)) return false;
     return Boolean(form.host.trim() && form.database.trim() && form.user.trim());
   };
 
@@ -46,8 +60,15 @@ function ConnectionsModal({ connections, onClose, onChanged }) {
     setTestResult({ pending: true });
     const cfg = buildCfg();
     if (editing !== 'new') cfg.id = editing; // reprendre le mdp stocké si champ vide
-    const r = await window.api.connections.test(cfg);
-    setTestResult(r);
+    try {
+      const r = await window.api.connections.test(cfg);
+      setTestResult(r);
+    } catch (err) {
+      // L'appel IPC peut rejeter (ex. exception synchrone côté main) plutôt
+      // que résoudre { ok: false, error } — sans ce catch, `pending` reste
+      // bloqué à true : bouton désactivé, spinner à l'infini, sans message.
+      setTestResult({ ok: false, error: `Échec du test : ${err.message}` });
+    }
   };
 
   const handleSave = async () => {
@@ -57,15 +78,48 @@ function ConnectionsModal({ connections, onClose, onChanged }) {
       else await window.api.connections.update(editing, buildCfg());
       setEditing(null);
       await onChanged?.();
+    } catch (err) {
+      // Réutilise la zone d'alerte du test : le formulaire reste ouvert
+      // (pas de setEditing(null)) et l'erreur reste visible jusqu'à la
+      // prochaine modification de champ (set() la réinitialise déjà).
+      setTestResult({ ok: false, error: `Échec de l'enregistrement : ${err.message}` });
     } finally {
       setSaving(false);
     }
   };
 
+  const clearRowError = (connId) => {
+    setRowErrors(prev => {
+      if (!(connId in prev)) return prev;
+      const next = { ...prev };
+      delete next[connId];
+      return next;
+    });
+  };
+
   const handleRemove = async (conn) => {
     if (window.confirm(`Retirer la connexion « ${conn.name} » ?\nLes données de la base ne seront pas supprimées.`)) {
-      await window.api.connections.remove(conn.id);
+      clearRowError(conn.id);
+      try {
+        await window.api.connections.remove(conn.id);
+        await onChanged?.();
+      } catch (err) {
+        setRowErrors(prev => ({ ...prev, [conn.id]: `Échec de la suppression : ${err.message}` }));
+      }
+    }
+  };
+
+  const handleReconnect = async (conn) => {
+    clearRowError(conn.id);
+    try {
+      const r = await window.api.connections.reconnect(conn.id);
+      if (r && r.ok === false) {
+        setRowErrors(prev => ({ ...prev, [conn.id]: `Échec de la reconnexion : ${r.error}` }));
+        return;
+      }
       await onChanged?.();
+    } catch (err) {
+      setRowErrors(prev => ({ ...prev, [conn.id]: `Échec de la reconnexion : ${err.message}` }));
     }
   };
 
@@ -103,10 +157,11 @@ function ConnectionsModal({ connections, onClose, onChanged }) {
                         {conn.type === 'sqlite' ? conn.file : `${conn.user}@${conn.host}:${conn.port}/${conn.database}`}
                       </div>
                       {state === 'error' && <div className="text-danger small">{conn.status.error}</div>}
+                      {rowErrors[conn.id] && <div className="text-danger small">{rowErrors[conn.id]}</div>}
                     </div>
                     {state === 'error' && (
                       <button className="btn btn-sm btn-outline-warning" title="Reconnecter"
-                        onClick={() => window.api.connections.reconnect(conn.id).then(() => onChanged?.())}>
+                        onClick={() => handleReconnect(conn)}>
                         <i className="bi bi-arrow-clockwise"></i>
                       </button>
                     )}
@@ -150,7 +205,8 @@ function ConnectionsModal({ connections, onClose, onChanged }) {
                     <div className="col-4">
                       <label className="form-label small mb-1">Port</label>
                       <input className="form-control form-control-sm" type="number" value={form.port}
-                        onChange={set('port')} placeholder={String(DEFAULT_PORTS[form.type])} />
+                        onChange={set('port')} placeholder={String(DEFAULT_PORTS[form.type])}
+                        min={PORT_MIN} max={PORT_MAX} step={1} />
                     </div>
                   </div>
                   <div className="mb-2">

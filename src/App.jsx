@@ -742,6 +742,7 @@ function App() {
         <ConnectionsModal
           connections={connections}
           onClose={() => setShowConnections(false)}
+          onChanged={loadData}
         />
       )}
     </DndProvider>
