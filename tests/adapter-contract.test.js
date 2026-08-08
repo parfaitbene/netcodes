@@ -42,6 +42,35 @@ adapterContract('postgres', {
   )`,
 });
 
+import { MySqlAdapter } from '../electron/db/mysql-adapter.js';
+
+const MYSQL_URL = process.env.TEST_MYSQL_URL;
+
+function mysqlConfigFromUrl(urlStr) {
+  const u = new URL(urlStr);
+  return {
+    host: u.hostname,
+    port: Number(u.port || 3306),
+    database: u.pathname.slice(1),
+    user: decodeURIComponent(u.username),
+    password: decodeURIComponent(u.password),
+  };
+}
+
+adapterContract('mysql', {
+  enabled: Boolean(MYSQL_URL),
+  makeAdapter: async () => {
+    const a = new MySqlAdapter(mysqlConfigFromUrl(MYSQL_URL));
+    await a.open();
+    return a;
+  },
+  itemsDdl: `CREATE TABLE items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    qty INT DEFAULT 0
+  )`,
+});
+
 import { describe, it, expect, vi } from 'vitest';
 
 describe.skipIf(!PG_URL)('PostgresAdapter.open failure handling', () => {
