@@ -28,4 +28,13 @@ describe('schemas', () => {
     expect(rows.map(r => r.name).sort()).toEqual([...TABLES].sort());
     await a.close();
   });
+
+  // Finding 4 : sans `PRAGMA foreign_keys = ON`, les `ON DELETE CASCADE` du
+  // schéma sont décoratifs sur SQLite (désactivés par connexion, par défaut).
+  it('open() active PRAGMA foreign_keys sur la connexion', async () => {
+    const a = new SqliteAdapter({ file: ':memory:' });
+    await a.open();
+    expect(a.db.pragma('foreign_keys', { simple: true })).toBe(1);
+    await a.close();
+  });
 });

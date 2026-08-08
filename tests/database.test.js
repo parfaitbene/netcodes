@@ -87,6 +87,28 @@ describe('notebookOps', () => {
     expect(await sectionOps.getByNotebook(connId, ids.nb1)).toHaveLength(0);
   });
 
+  // Finding 4 : sans PRAGMA foreign_keys = ON, ON DELETE CASCADE est
+  // décoratif sur SQLite — la suppression laisse sections/pages/blocs
+  // orphelins au lieu de les supprimer en cascade sur toute la profondeur.
+  it('delete supprime le notebook et TOUTE sa descendance en cascade (sections, pages, blocs)', async () => {
+    // nb1 a deux sections (sec1, sec2) : sec1 a les pages p1 (blocs b1, b2)
+    // et p2 (bloc b3), sec2 a la page p3 (aucun bloc).
+    await notebookOps.delete(connId, ids.nb1);
+
+    expect(await notebookOps.getById(connId, ids.nb1)).toBeUndefined();
+    expect(await sectionOps.getById(connId, ids.sec1)).toBeUndefined();
+    expect(await sectionOps.getById(connId, ids.sec2)).toBeUndefined();
+    expect(await pageOps.getById(connId, ids.p1)).toBeUndefined();
+    expect(await pageOps.getById(connId, ids.p2)).toBeUndefined();
+    expect(await pageOps.getById(connId, ids.p3)).toBeUndefined();
+    expect(await blockOps.getById(connId, ids.b1)).toBeUndefined();
+    expect(await blockOps.getById(connId, ids.b2)).toBeUndefined();
+    expect(await blockOps.getById(connId, ids.b3)).toBeUndefined();
+
+    // nb2, hors de la branche supprimée, n'est pas affecté.
+    expect(await notebookOps.getById(connId, ids.nb2)).not.toBeUndefined();
+  });
+
   it('reorder met à jour la position', async () => {
     await notebookOps.reorder(connId, ids.nb1, 5);
     expect((await notebookOps.getById(connId, ids.nb1)).position).toBe(5);
