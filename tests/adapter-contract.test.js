@@ -42,7 +42,7 @@ adapterContract('postgres', {
   )`,
 });
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 describe.skipIf(!PG_URL)('PostgresAdapter.open failure handling', () => {
   it('libère le client quand la connexion échoue', async () => {
@@ -51,5 +51,25 @@ describe.skipIf(!PG_URL)('PostgresAdapter.open failure handling', () => {
     expect(bad.client).toBeNull();
     // close() sur un adaptateur jamais ouvert ne doit pas jeter
     await expect(bad.close()).resolves.toBeUndefined();
+  });
+});
+
+describe('PostgresAdapter connection loss', () => {
+  it("capture l'événement 'error' du client au lieu de laisser Node le relancer", async () => {
+    const adapter = new PostgresAdapter({ host: 'h', port: 5432, database: 'd', user: 'u', password: 'p' });
+    // Neutralise la connexion réseau : on veut seulement le comportement du listener.
+    const pg = (await import('pg')).default;
+    const connectSpy = vi.spyOn(pg.Client.prototype, 'connect').mockResolvedValue(undefined);
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await adapter.open();
+      expect(adapter.lastError).toBeNull();
+      // Perte de connexion côté serveur pendant l'inactivité.
+      adapter.client.emit('error', new Error('connection terminated unexpectedly'));
+      expect(adapter.lastError?.message).toBe('connection terminated unexpectedly');
+    } finally {
+      connectSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+    }
   });
 });
