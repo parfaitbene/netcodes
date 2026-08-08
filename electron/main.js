@@ -10,7 +10,7 @@ import {
   tagOps,
   searchOps,
 } from './database.js';
-import { manager, ADAPTERS } from './db/connection-manager.js';
+import { manager, ADAPTERS, normalizeConnectionError } from './db/connection-manager.js';
 import {
   listConnections, getConnectionForOpen, addConnection, updateConnection,
   removeConnection, migrateLegacyDbPath,
@@ -296,7 +296,7 @@ ipcMain.handle('connections:test', async (_, cfg) => {
     return { ok: true };
   } catch (err) {
     if (adapter) await adapter.close().catch(() => {});
-    return { ok: false, error: err.message };
+    return { ok: false, error: normalizeConnectionError(err) };
   }
 });
 
@@ -305,7 +305,7 @@ ipcMain.handle('connections:reconnect', async (_, id) => {
     await manager.open(getConnectionForOpen(id));
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err.message };
+    return { ok: false, error: normalizeConnectionError(err) };
   }
 });
 

@@ -17,6 +17,30 @@ function loadSchema(type) {
   return fs.readFileSync(path.join(__dirname, 'schema', `${type}.sql`), 'utf-8');
 }
 
+// Un hôte dual-stack (ex. `localhost` → `::1` + `127.0.0.1`) dont les deux
+// adresses refusent la connexion fait lever à Node un `AggregateError` dont
+// `.message` est une chaîne vide : sans cette normalisation, le statut affiché
+// à l'utilisateur (point rouge + tooltip) ne dit rien du tout. Exportée pour
+// être réutilisée partout où une erreur de connexion devient un message
+// affiché (IPC `connections:test`, `connections:reconnect`).
+export function normalizeConnectionError(err) {
+  if (!err) return 'Connexion impossible (échec sans détail).';
+
+  // AggregateError (ou toute erreur portant un tableau `errors`, ex. Node
+  // dual-stack ECONNREFUSED sur ::1 + 127.0.0.1) : on regroupe les messages
+  // distincts des erreurs enfants.
+  if (Array.isArray(err.errors) && err.errors.length > 0) {
+    const childMessages = err.errors.map((e) => (e && e.message) || (e && e.code)).filter(Boolean);
+    const distinct = [...new Set(childMessages)];
+    if (distinct.length > 0) return distinct.join(' ; ');
+  }
+
+  if (err.message) return err.message;
+  if (err.code) return err.code;
+
+  return 'Connexion impossible (échec sans détail).';
+}
+
 class ConnectionManager {
   constructor() {
     this.connections = new Map(); // id -> { adapter, config }
@@ -50,7 +74,7 @@ class ConnectionManager {
       return adapter;
     } catch (err) {
       await adapter.close().catch(() => {});
-      this.setStatus(config.id, 'error', err.message);
+      this.setStatus(config.id, 'error', normalizeConnectionError(err));
       throw err;
     }
   }
