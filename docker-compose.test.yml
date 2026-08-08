@@ -1,0 +1,22 @@
+# Serveurs jetables pour les contract tests MySQL/PostgreSQL.
+# docker compose -f docker-compose.test.yml up -d
+# TEST_PG_URL=postgres://netcodes:netcodes@localhost:5433/netcodes_test
+# TEST_MYSQL_URL=mysql://netcodes:netcodes@localhost:3307/netcodes_test
+services:
+  pg-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: netcodes
+      POSTGRES_PASSWORD: netcodes
+      POSTGRES_DB: netcodes_test
+    ports:
+      - "5433:5432"
+  mysql-test:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: netcodes
+      MYSQL_DATABASE: netcodes_test
+      MYSQL_USER: netcodes
+      MYSQL_PASSWORD: netcodes
+    ports:
+      - "3307:3306"
