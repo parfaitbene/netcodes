@@ -6,6 +6,9 @@ import DropdownMenu from './DropdownMenu';
 
 const NOTEBOOK_ICONS = ['📓', '📕', '📗', '📘', '📙', '📔', '📒', '📑', '🗒️', '📝', '✏️', '📋', '📄', '📃', '📰', '📑'];
 
+const CONN_ICONS = { sqlite: 'bi-file-earmark-binary', mysql: 'bi-database', postgres: 'bi-database-fill' };
+const CONN_STATE_COLORS = { connected: '#28a745', connecting: '#ffc107', error: '#dc3545', closed: '#6c757d' };
+
 function IconPickerTrigger({ icon, open, onToggle, onSelect, onClose }) {
   const triggerRef = useRef(null);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
@@ -71,6 +74,10 @@ function IconPickerTrigger({ icon, open, onToggle, onSelect, onClose }) {
   );
 }
 
+// Row ids are unique only WITHIN a connection (two databases can both have a
+// notebook `id: 1`), so every piece of local UI state that keys off a
+// notebook — expansion, editing, icon picker — must key off the composite
+// `${connId}:${id}`, never the bare id alone.
 function DraggableNotebookItem({
   notebook,
   index,
@@ -92,6 +99,8 @@ function DraggableNotebookItem({
   setShowIconPicker,
 }) {
   const ref = useRef(null);
+  const notebookKey = `${notebook.connId}:${notebook.id}`;
+
   const [{ handlerId }, drop] = useDrop({
     accept: ItemTypes.NOTEBOOK,
     collect(monitor) {
@@ -101,6 +110,12 @@ function DraggableNotebookItem({
     },
     hover(item, monitor) {
       if (!ref.current) {
+        return;
+      }
+      // Reordering is strictly intra-connection: a notebook dragged out of
+      // one connection's group must never react to hovering over another
+      // connection's rows (their `index` values are unrelated).
+      if (item.connId !== notebook.connId) {
         return;
       }
       const dragIndex = item.index;
@@ -123,14 +138,14 @@ function DraggableNotebookItem({
         return;
       }
 
-      moveNotebook(item.id, dragIndex, hoverIndex);
+      moveNotebook(item.id, item.connId, dragIndex, hoverIndex);
       item.index = hoverIndex;
     },
   });
 
   const [{ isDragging }, drag] = useDrag({
     type: ItemTypes.NOTEBOOK,
-    item: () => ({ id: notebook.id, index }),
+    item: () => ({ id: notebook.id, connId: notebook.connId, index }),
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
@@ -139,7 +154,8 @@ function DraggableNotebookItem({
   const opacity = isDragging ? 0 : 1;
   drag(drop(ref));
 
-  const isExpanded = expandedNotebooks.includes(notebook.id);
+  const isExpanded = expandedNotebooks.includes(notebookKey);
+  const isActive = selectedNotebook?.connId === notebook.connId && selectedNotebook?.id === notebook.id;
 
   return (
     <div
@@ -149,13 +165,13 @@ function DraggableNotebookItem({
       className="mb-2"
     >
       <div
-        className={`notebook-item ${selectedNotebook?.id === notebook.id ? 'active' : ''}`}
+        className={`notebook-item ${isActive ? 'active' : ''}`}
         onClick={() => onNotebookSelect(notebook, true)}
       >
         <span
           onClick={(e) => {
             e.stopPropagation();
-            toggleNotebook(notebook.id);
+            toggleNotebook(notebookKey);
           }}
           style={{ cursor: 'pointer' }}
         >
@@ -163,19 +179,19 @@ function DraggableNotebookItem({
         </span>
         <IconPickerTrigger
           icon={notebook.icon}
-          open={showIconPicker === notebook.id}
+          open={showIconPicker === notebookKey}
           onToggle={(e) => {
             e.stopPropagation();
-            setShowIconPicker(showIconPicker === notebook.id ? null : notebook.id);
+            setShowIconPicker(showIconPicker === notebookKey ? null : notebookKey);
           }}
           onSelect={(icon) => {
-            onUpdateNotebook(notebook.id, notebook.name, icon);
+            onUpdateNotebook(notebook.connId, notebook.id, notebook.name, icon);
             setShowIconPicker(null);
           }}
           onClose={() => setShowIconPicker(null)}
         />
         <span className="flex-grow-1 text-truncate">
-          {editingNotebookId === notebook.id ? (
+          {editingNotebookId === notebookKey ? (
             <input
               type="text"
               className="form-control form-control-sm"
@@ -183,7 +199,7 @@ function DraggableNotebookItem({
               onChange={(e) => setEditedNotebookName(e.target.value)}
               onKeyPress={(e) => {
                 if (e.key === 'Enter') {
-                  onUpdateNotebook(notebook.id, editedNotebookName, notebook.icon);
+                  onUpdateNotebook(notebook.connId, notebook.id, editedNotebookName, notebook.icon);
                   setEditingNotebookId(null);
                 }
               }}
@@ -193,13 +209,13 @@ function DraggableNotebookItem({
             notebook.name
           )}
         </span>
-        {editingNotebookId === notebook.id ? (
+        {editingNotebookId === notebookKey ? (
           <div className="d-flex gap-1">
             <button
               className="btn btn-sm btn-success p-0 px-1"
               onClick={(e) => {
                 e.stopPropagation();
-                onUpdateNotebook(notebook.id, editedNotebookName, notebook.icon);
+                onUpdateNotebook(notebook.connId, notebook.id, editedNotebookName, notebook.icon);
                 setEditingNotebookId(null);
               }}
               title="Enregistrer"
@@ -226,7 +242,7 @@ function DraggableNotebookItem({
                 icon: 'bi-pencil',
                 onClick: () => {
                   setEditedNotebookName(notebook.name);
-                  setEditingNotebookId(notebook.id);
+                  setEditingNotebookId(notebookKey);
                 },
               },
               {
@@ -239,32 +255,32 @@ function DraggableNotebookItem({
                 label: 'Monter',
                 icon: 'bi-arrow-up',
                 disabled: index === 0,
-                onClick: () => onReorderNotebook(notebook.id, index - 1),
+                onClick: () => onReorderNotebook(notebook.connId, notebook.id, index - 1),
               },
               {
                 label: 'En tête de liste',
                 icon: 'bi-chevron-double-up',
                 disabled: index === 0,
-                onClick: () => onReorderNotebook(notebook.id, 0),
+                onClick: () => onReorderNotebook(notebook.connId, notebook.id, 0),
               },
               {
                 label: 'Descendre',
                 icon: 'bi-arrow-down',
                 disabled: index === notebookCount - 1,
-                onClick: () => onReorderNotebook(notebook.id, index + 1),
+                onClick: () => onReorderNotebook(notebook.connId, notebook.id, index + 1),
               },
               {
                 label: 'En fin de liste',
                 icon: 'bi-chevron-double-down',
                 disabled: index === notebookCount - 1,
-                onClick: () => onReorderNotebook(notebook.id, notebookCount - 1),
+                onClick: () => onReorderNotebook(notebook.connId, notebook.id, notebookCount - 1),
               },
               { separator: true },
               {
                 label: 'Supprimer',
                 icon: 'bi-trash',
                 danger: true,
-                onClick: () => onDeleteNotebook(notebook.id),
+                onClick: () => onDeleteNotebook(notebook.connId, notebook.id),
               },
             ]}
           />
@@ -274,14 +290,57 @@ function DraggableNotebookItem({
   );
 }
 
+function ConnectionGroup({ conn, isCollapsed, onToggle, onCreateNotebook, onReconnect, children }) {
+  const state = conn.status?.state ?? 'closed';
+  return (
+    <div className="connection-group mb-2">
+      <div
+        className="d-flex align-items-center gap-2 px-2 py-1 fw-semibold"
+        style={{ cursor: 'pointer', fontSize: '0.85rem', opacity: state === 'connected' ? 1 : 0.6 }}
+        onClick={onToggle}
+        title={state === 'error' ? conn.status.error : conn.name}
+      >
+        <i className={`bi ${isCollapsed ? 'bi-chevron-right' : 'bi-chevron-down'}`} style={{ fontSize: '0.7rem' }}></i>
+        <i className={`bi ${CONN_ICONS[conn.type] ?? 'bi-database'}`}></i>
+        <span className="flex-grow-1 text-truncate">{conn.name}</span>
+        <span style={{
+          width: 8, height: 8, borderRadius: '50%',
+          backgroundColor: CONN_STATE_COLORS[state] ?? '#6c757d',
+        }}></span>
+        {state === 'connected' && (
+          <button
+            className="btn btn-sm btn-link p-0"
+            title="Nouveau notebook dans cette base"
+            onClick={(e) => { e.stopPropagation(); onCreateNotebook(conn.id); }}
+          >
+            <i className="bi bi-plus-circle"></i>
+          </button>
+        )}
+        {state === 'error' && (
+          <button
+            className="btn btn-sm btn-link p-0 text-danger"
+            title={`Reconnecter — ${conn.status.error}`}
+            onClick={(e) => { e.stopPropagation(); onReconnect(conn.id); }}
+          >
+            <i className="bi bi-arrow-clockwise"></i>
+          </button>
+        )}
+      </div>
+      {!isCollapsed && state === 'connected' && <div className="ps-2">{children}</div>}
+    </div>
+  );
+}
+
 function Sidebar({
   notebooks,
   sections,
+  connections = [],
   selectedNotebook,
   selectedSection,
   onNotebookSelect,
   onSectionSelect,
   onCreateNotebook,
+  onNotebookCreateInConnection,
   onCreateSection,
   onDeleteNotebook,
   onDeleteSection,
@@ -295,12 +354,14 @@ function Sidebar({
   onOpenSearch,
   style,
 }) {
+  // Keyed on `${connId}:${id}` throughout — see comment above
+  // DraggableNotebookItem for why a bare notebook id is not safe here.
   const [expandedNotebooks, setExpandedNotebooks] = useState(() => {
     try {
       const stored = localStorage.getItem('expandedNotebooks');
-      return stored ? JSON.parse(stored) : notebooks.map(n => n.id);
+      return stored ? JSON.parse(stored) : notebooks.map(n => `${n.connId}:${n.id}`);
     } catch {
-      return notebooks.map(n => n.id);
+      return notebooks.map(n => `${n.connId}:${n.id}`);
     }
   });
   const [editingNotebookId, setEditingNotebookId] = useState(null);
@@ -309,44 +370,52 @@ function Sidebar({
   const [editedSectionTitle, setEditedSectionTitle] = useState('');
   const [showIconPicker, setShowIconPicker] = useState(null);
   const [hoveredSectionId, setHoveredSectionId] = useState(null);
-  const knownNotebookIdsRef = useRef(new Set(notebooks.map(n => n.id)));
+  const [collapsedConns, setCollapsedConns] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('collapsedConnections')) ?? []; }
+    catch { return []; }
+  });
+  const knownNotebookIdsRef = useRef(new Set(notebooks.map(n => `${n.connId}:${n.id}`)));
 
   // Auto-expand notebooks the user just created, without re-expanding
   // notebooks the user had deliberately collapsed in a previous session
   // (those are also "missing" from expandedNotebooks, but aren't new).
   useEffect(() => {
-    const currentIds = notebooks.map(n => n.id);
-    const newIds = currentIds.filter(id => !knownNotebookIdsRef.current.has(id));
-    if (newIds.length > 0) {
-      setExpandedNotebooks(prev => [...prev, ...newIds]);
+    const currentKeys = notebooks.map(n => `${n.connId}:${n.id}`);
+    const newKeys = currentKeys.filter(key => !knownNotebookIdsRef.current.has(key));
+    if (newKeys.length > 0) {
+      setExpandedNotebooks(prev => [...prev, ...newKeys]);
     }
-    knownNotebookIdsRef.current = new Set(currentIds);
+    knownNotebookIdsRef.current = new Set(currentKeys);
   }, [notebooks]);
 
   useEffect(() => {
     if (selectedNotebook) {
-      setExpandedNotebooks(prev =>
-        prev.includes(selectedNotebook.id) ? prev : [...prev, selectedNotebook.id]
-      );
+      const key = `${selectedNotebook.connId}:${selectedNotebook.id}`;
+      setExpandedNotebooks(prev => prev.includes(key) ? prev : [...prev, key]);
     }
-  }, [selectedNotebook?.id]);
+  }, [selectedNotebook?.connId, selectedNotebook?.id]);
 
   useEffect(() => {
     localStorage.setItem('expandedNotebooks', JSON.stringify(expandedNotebooks));
   }, [expandedNotebooks]);
 
-  const toggleNotebook = (notebookId) => {
+  useEffect(() => {
+    localStorage.setItem('collapsedConnections', JSON.stringify(collapsedConns));
+  }, [collapsedConns]);
+
+  const toggleNotebook = (notebookKey) => {
     setExpandedNotebooks(prev =>
-      prev.includes(notebookId)
-        ? prev.filter(id => id !== notebookId)
-        : [...prev, notebookId]
+      prev.includes(notebookKey)
+        ? prev.filter(key => key !== notebookKey)
+        : [...prev, notebookKey]
     );
   };
 
-  const moveNotebook = async (id, dragIndex, hoverIndex) => {
-    const draggedNotebook = notebooks.find(notebook => notebook.id === id);
+  const moveNotebook = async (id, connId, dragIndex, hoverIndex) => {
+    const connNotebooks = notebooks.filter(n => n.connId === connId);
+    const draggedNotebook = connNotebooks.find(notebook => notebook.id === id);
     if (draggedNotebook) {
-      await onReorderNotebook(draggedNotebook.id, hoverIndex);
+      await onReorderNotebook(connId, draggedNotebook.id, hoverIndex);
     }
   };
 
@@ -391,163 +460,186 @@ function Sidebar({
             <p className="small">Click "Notebook" to create one.</p>
           </div>
         ) : (
-          notebooks.map((notebook, index) => {
-            const notebookSections = sections.filter(s => s.notebook_id === notebook.id);
-            const isExpanded = expandedNotebooks.includes(notebook.id);
-
+          connections.map(conn => {
+            const connNotebooks = notebooks.filter(n => n.connId === conn.id);
             return (
-              <div key={notebook.id}>
-                <DraggableNotebookItem
-                  notebook={notebook}
-                  index={index}
-                  notebookCount={notebooks.length}
-                  moveNotebook={moveNotebook}
-                  onReorderNotebook={onReorderNotebook}
-                  selectedNotebook={selectedNotebook}
-                  onNotebookSelect={onNotebookSelect}
-                  onUpdateNotebook={onUpdateNotebook}
-                  onDeleteNotebook={onDeleteNotebook}
-                  onExportNotebook={onExportNotebook}
-                  expandedNotebooks={expandedNotebooks}
-                  toggleNotebook={toggleNotebook}
-                  editingNotebookId={editingNotebookId}
-                  editedNotebookName={editedNotebookName}
-                  setEditedNotebookName={setEditedNotebookName}
-                  setEditingNotebookId={setEditingNotebookId}
-                  showIconPicker={showIconPicker}
-                  setShowIconPicker={setShowIconPicker}
-                />
+              <ConnectionGroup
+                key={conn.id}
+                conn={conn}
+                isCollapsed={collapsedConns.includes(conn.id)}
+                onToggle={() => setCollapsedConns(prev =>
+                  prev.includes(conn.id) ? prev.filter(id => id !== conn.id) : [...prev, conn.id])}
+                onCreateNotebook={onNotebookCreateInConnection}
+                onReconnect={(id) => window.api.connections.reconnect(id)}
+              >
+                {connNotebooks.map((notebook, index) => {
+                  const notebookKey = `${notebook.connId}:${notebook.id}`;
+                  const notebookSections = sections.filter(s => s.connId === notebook.connId && s.notebook_id === notebook.id);
+                  const isExpanded = expandedNotebooks.includes(notebookKey);
 
-                {isExpanded && notebookSections.map((section, sectionIndex) => (
-                  <div
-                    key={section.id}
-                    className={`section-item ${selectedSection?.id === section.id ? 'active' : ''}`}
-                    onClick={() => onSectionSelect(section)}
-                    onMouseEnter={() => setHoveredSectionId(section.id)}
-                    onMouseLeave={() => setHoveredSectionId(null)}
-                    style={{ justifyContent: 'space-between' }}
-                  >
-                    <span
-                      style={{
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '50%',
-                        backgroundColor: section.color,
-                        display: 'inline-block',
-                        flexShrink: 0,
-                      }}
-                    ></span>
-                    <span style={{ flexGrow: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {editingSectionId === section.id ? (
-                        <input
-                          type="text"
-                          className="form-control form-control-sm"
-                          value={editedSectionTitle}
-                          onChange={(e) => setEditedSectionTitle(e.target.value)}
-                          onKeyPress={(e) => {
-                            if (e.key === 'Enter') {
-                              onUpdateSection(section.id, editedSectionTitle, section.color);
-                              setEditingSectionId(null);
-                            }
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ) : (
-                        section.title
-                      )}
-                    </span>
-                    <div style={{
-                      overflow: 'hidden',
-                      flexShrink: 0,
-                      opacity: hoveredSectionId === section.id || editingSectionId === section.id ? 1 : 0,
-                      width: hoveredSectionId === section.id || editingSectionId === section.id ? '48px' : '0px',
-                      transition: 'opacity 0.25s, width 0.25s',
-                    }}>
-                      {editingSectionId === section.id ? (
-                        <div className="d-flex gap-1">
-                          <button
-                            className="btn btn-sm btn-success p-0 px-1"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onUpdateSection(section.id, editedSectionTitle, section.color);
-                              setEditingSectionId(null);
-                            }}
-                            title="Enregistrer"
+                  return (
+                    <div key={notebookKey}>
+                      <DraggableNotebookItem
+                        notebook={notebook}
+                        index={index}
+                        notebookCount={connNotebooks.length}
+                        moveNotebook={moveNotebook}
+                        onReorderNotebook={onReorderNotebook}
+                        selectedNotebook={selectedNotebook}
+                        onNotebookSelect={onNotebookSelect}
+                        onUpdateNotebook={onUpdateNotebook}
+                        onDeleteNotebook={onDeleteNotebook}
+                        onExportNotebook={onExportNotebook}
+                        expandedNotebooks={expandedNotebooks}
+                        toggleNotebook={toggleNotebook}
+                        editingNotebookId={editingNotebookId}
+                        editedNotebookName={editedNotebookName}
+                        setEditedNotebookName={setEditedNotebookName}
+                        setEditingNotebookId={setEditingNotebookId}
+                        showIconPicker={showIconPicker}
+                        setShowIconPicker={setShowIconPicker}
+                      />
+
+                      {isExpanded && notebookSections.map((section, sectionIndex) => {
+                        const sectionKey = `${section.connId}:${section.id}`;
+                        const isSectionActive = selectedSection?.connId === section.connId && selectedSection?.id === section.id;
+                        const isEditingSection = editingSectionId === sectionKey;
+                        const isHoveredSection = hoveredSectionId === sectionKey;
+
+                        return (
+                          <div
+                            key={sectionKey}
+                            className={`section-item ${isSectionActive ? 'active' : ''}`}
+                            onClick={() => onSectionSelect(section)}
+                            onMouseEnter={() => setHoveredSectionId(sectionKey)}
+                            onMouseLeave={() => setHoveredSectionId(null)}
+                            style={{ justifyContent: 'space-between' }}
                           >
-                            <i className="bi bi-check-lg"></i>
-                          </button>
-                          <button
-                            className="btn btn-sm btn-secondary p-0 px-1"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditedSectionTitle(section.title);
-                              setEditingSectionId(null);
-                            }}
-                            title="Annuler"
-                          >
-                            <i className="bi bi-x-lg"></i>
-                          </button>
-                        </div>
-                      ) : (
-                        <DropdownMenu
-                          items={[
-                            {
-                              label: 'Renommer',
-                              icon: 'bi-pencil',
-                              onClick: () => {
-                                setEditedSectionTitle(section.title);
-                                setEditingSectionId(section.id);
-                              },
-                            },
-                            {
-                              label: 'Déplacer',
-                              icon: 'bi-arrow-right-square',
-                              onClick: () => onMoveSection(section),
-                            },
-                            {
-                              label: 'Exporter',
-                              icon: 'bi-file-earmark-arrow-down',
-                              onClick: () => onExportSection(section),
-                            },
-                            { separator: true },
-                            {
-                              label: 'Monter',
-                              icon: 'bi-arrow-up',
-                              disabled: sectionIndex === 0,
-                              onClick: () => onReorderSection(section.id, sectionIndex - 1),
-                            },
-                            {
-                              label: 'En tête de liste',
-                              icon: 'bi-chevron-double-up',
-                              disabled: sectionIndex === 0,
-                              onClick: () => onReorderSection(section.id, 0),
-                            },
-                            {
-                              label: 'Descendre',
-                              icon: 'bi-arrow-down',
-                              disabled: sectionIndex === notebookSections.length - 1,
-                              onClick: () => onReorderSection(section.id, sectionIndex + 1),
-                            },
-                            {
-                              label: 'En fin de liste',
-                              icon: 'bi-chevron-double-down',
-                              disabled: sectionIndex === notebookSections.length - 1,
-                              onClick: () => onReorderSection(section.id, notebookSections.length - 1),
-                            },
-                            { separator: true },
-                            {
-                              label: 'Supprimer',
-                              icon: 'bi-trash',
-                              danger: true,
-                              onClick: () => onDeleteSection(section.id),
-                            },
-                          ]}
-                        />
-                      )}
+                            <span
+                              style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                backgroundColor: section.color,
+                                display: 'inline-block',
+                                flexShrink: 0,
+                              }}
+                            ></span>
+                            <span style={{ flexGrow: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {isEditingSection ? (
+                                <input
+                                  type="text"
+                                  className="form-control form-control-sm"
+                                  value={editedSectionTitle}
+                                  onChange={(e) => setEditedSectionTitle(e.target.value)}
+                                  onKeyPress={(e) => {
+                                    if (e.key === 'Enter') {
+                                      onUpdateSection(section.connId, section.id, editedSectionTitle, section.color);
+                                      setEditingSectionId(null);
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              ) : (
+                                section.title
+                              )}
+                            </span>
+                            <div style={{
+                              overflow: 'hidden',
+                              flexShrink: 0,
+                              opacity: isHoveredSection || isEditingSection ? 1 : 0,
+                              width: isHoveredSection || isEditingSection ? '48px' : '0px',
+                              transition: 'opacity 0.25s, width 0.25s',
+                            }}>
+                              {isEditingSection ? (
+                                <div className="d-flex gap-1">
+                                  <button
+                                    className="btn btn-sm btn-success p-0 px-1"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onUpdateSection(section.connId, section.id, editedSectionTitle, section.color);
+                                      setEditingSectionId(null);
+                                    }}
+                                    title="Enregistrer"
+                                  >
+                                    <i className="bi bi-check-lg"></i>
+                                  </button>
+                                  <button
+                                    className="btn btn-sm btn-secondary p-0 px-1"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditedSectionTitle(section.title);
+                                      setEditingSectionId(null);
+                                    }}
+                                    title="Annuler"
+                                  >
+                                    <i className="bi bi-x-lg"></i>
+                                  </button>
+                                </div>
+                              ) : (
+                                <DropdownMenu
+                                  items={[
+                                    {
+                                      label: 'Renommer',
+                                      icon: 'bi-pencil',
+                                      onClick: () => {
+                                        setEditedSectionTitle(section.title);
+                                        setEditingSectionId(sectionKey);
+                                      },
+                                    },
+                                    {
+                                      label: 'Déplacer',
+                                      icon: 'bi-arrow-right-square',
+                                      onClick: () => onMoveSection(section),
+                                    },
+                                    {
+                                      label: 'Exporter',
+                                      icon: 'bi-file-earmark-arrow-down',
+                                      onClick: () => onExportSection(section),
+                                    },
+                                    { separator: true },
+                                    {
+                                      label: 'Monter',
+                                      icon: 'bi-arrow-up',
+                                      disabled: sectionIndex === 0,
+                                      onClick: () => onReorderSection(section.connId, section.id, sectionIndex - 1),
+                                    },
+                                    {
+                                      label: 'En tête de liste',
+                                      icon: 'bi-chevron-double-up',
+                                      disabled: sectionIndex === 0,
+                                      onClick: () => onReorderSection(section.connId, section.id, 0),
+                                    },
+                                    {
+                                      label: 'Descendre',
+                                      icon: 'bi-arrow-down',
+                                      disabled: sectionIndex === notebookSections.length - 1,
+                                      onClick: () => onReorderSection(section.connId, section.id, sectionIndex + 1),
+                                    },
+                                    {
+                                      label: 'En fin de liste',
+                                      icon: 'bi-chevron-double-down',
+                                      disabled: sectionIndex === notebookSections.length - 1,
+                                      onClick: () => onReorderSection(section.connId, section.id, notebookSections.length - 1),
+                                    },
+                                    { separator: true },
+                                    {
+                                      label: 'Supprimer',
+                                      icon: 'bi-trash',
+                                      danger: true,
+                                      onClick: () => onDeleteSection(section.connId, section.id),
+                                    },
+                                  ]}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
-                ))}
-              </div>
+                  );
+                })}
+              </ConnectionGroup>
             );
           })
         )}
