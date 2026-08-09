@@ -1,24 +1,35 @@
-import { app, BrowserWindow, ipcMain, Menu, dialog, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, shell, dialog } from 'electron';
 import prompt from 'custom-electron-prompt';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import {
-  initDatabase,
-  closeDatabase,
   notebookOps,
   sectionOps,
   pageOps,
   blockOps,
   tagOps,
-  searchOps
+  searchOps,
 } from './database.js';
-import { getDbPath, setDbPath, getDefaultDbPath } from './settings.js';
+import { manager, ADAPTERS, normalizeConnectionError } from './db/connection-manager.js';
+import {
+  listConnections, getConnectionForOpen, addConnection, updateConnection,
+  removeConnection, migrateLegacyDbPath,
+} from './settings.js';
 import { exportOps } from './export.js';
+import { resolveTestConfig } from './db/test-connection.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow;
+
+// Envoi défensif vers le renderer : évite d'écrire deux fois la même garde
+// `mainWindow && !mainWindow.isDestroyed()` (statut de connexion, menu...).
+function sendToRenderer(channel, payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, payload);
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -88,7 +99,6 @@ function createWindow() {
 }
 
 function setupApplicationMenu() {
-  const currentPath = getDbPath() || getDefaultDbPath();
   const template = [
     {
       label: 'Édition',
@@ -106,13 +116,8 @@ function setupApplicationMenu() {
       label: 'Paramètres',
       submenu: [
         {
-          label: 'Choisir la base de données...',
-          click: () => handleChooseDatabase(),
-        },
-        { type: 'separator' },
-        {
-          label: `Base actuelle : ${currentPath}`,
-          enabled: false,
+          label: 'Connexions aux bases de données...',
+          click: () => sendToRenderer('ui:open-connections'),
         },
       ],
     },
@@ -132,85 +137,27 @@ function setupApplicationMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-async function handleChooseDatabase() {
-  const currentPath = getDbPath() || getDefaultDbPath();
+app.whenReady().then(async () => {
+  migrateLegacyDbPath();
 
-  const { response: choice } = await dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Paramètres — Base de données',
-    message: 'Base de données active',
-    detail: `Chemin actuel :\n${currentPath}\n\nChoisissez une action :`,
-    buttons: [
-      'Sélectionner un fichier existant',
-      'Créer un nouveau fichier',
-      'Annuler',
-    ],
-    defaultId: 0,
-    cancelId: 2,
-  });
-
-  if (choice === 2) return;
-
-  let newDbPath = null;
-
-  if (choice === 0) {
-    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
-      title: 'Sélectionner une base de données',
-      defaultPath: currentPath,
-      filters: [{ name: 'SQLite Database', extensions: ['sqlite', 'db'] }],
-      properties: ['openFile'],
-    });
-    if (canceled || filePaths.length === 0) return;
-    newDbPath = filePaths[0];
-  } else {
-    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-      title: 'Créer une nouvelle base de données',
-      defaultPath: path.join(path.dirname(currentPath), 'netcodes-new.sqlite'),
-      filters: [{ name: 'SQLite Database', extensions: ['sqlite'] }],
-    });
-    if (canceled || !filePath) return;
-    newDbPath = filePath;
-    if (!newDbPath.endsWith('.sqlite') && !newDbPath.endsWith('.db')) {
-      newDbPath += '.sqlite';
-    }
-  }
-
-  if (newDbPath === currentPath) {
-    await dialog.showMessageBox(mainWindow, {
-      type: 'info',
-      title: 'Aucun changement',
-      message: 'Le fichier sélectionné est déjà la base de données active.',
-    });
-    return;
-  }
-
-  const { response: confirmed } = await dialog.showMessageBox(mainWindow, {
-    type: 'question',
-    title: 'Confirmer le changement',
-    message: 'Redémarrage nécessaire',
-    detail: `La base de données va être changée pour :\n${newDbPath}\n\nL'application va redémarrer.`,
-    buttons: ['Redémarrer maintenant', 'Annuler'],
-    defaultId: 0,
-    cancelId: 1,
-  });
-
-  if (confirmed === 1) return;
-
-  setDbPath(newDbPath);
-  app.relaunch();
-  app.quit();
-}
-
-app.whenReady().then(() => {
-  try {
-    const savedDbPath = getDbPath();
-    initDatabase(savedDbPath);
-  } catch (err) {
-    console.error('Database init failed:', err);
-  }
+  manager.onStatusChange = (id, status) => {
+    sendToRenderer('connections:status-changed', { id, ...status });
+  };
 
   setupApplicationMenu();
   createWindow();
+
+  // Reconnexion automatique : toutes les connexions enregistrées, en parallèle.
+  // Un échec laisse la connexion en statut error sans bloquer le démarrage.
+  const configs = [];
+  for (const c of listConnections()) {
+    try {
+      configs.push(getConnectionForOpen(c.id));
+    } catch (err) {
+      console.error(`Connexion ${c.id} illisible :`, err);
+    }
+  }
+  manager.openAll(configs);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -219,8 +166,8 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('window-all-closed', () => {
-  closeDatabase();
+app.on('window-all-closed', async () => {
+  await manager.closeAll();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -239,57 +186,128 @@ function toPosition(val) {
 }
 
 // IPC Handlers for Notebooks
-ipcMain.handle('notebooks:getAll', () => notebookOps.getAll());
-ipcMain.handle('notebooks:getById', (_, id) => notebookOps.getById(toId(id)));
-ipcMain.handle('notebooks:create', (_, name, icon) => notebookOps.create(name, icon));
-ipcMain.handle('notebooks:update', (_, id, name, icon) => notebookOps.update(toId(id), name, icon));
-ipcMain.handle('notebooks:delete', (_, id) => notebookOps.delete(toId(id)));
-ipcMain.handle('notebooks:reorder', (_, id, position) => notebookOps.reorder(toId(id), toPosition(position)));
+ipcMain.handle('notebooks:getAll', (_, connId) => notebookOps.getAll(connId));
+ipcMain.handle('notebooks:getById', (_, connId, id) => notebookOps.getById(connId, toId(id)));
+ipcMain.handle('notebooks:create', (_, connId, name, icon) => notebookOps.create(connId, name, icon));
+ipcMain.handle('notebooks:update', (_, connId, id, name, icon) => notebookOps.update(connId, toId(id), name, icon));
+ipcMain.handle('notebooks:delete', (_, connId, id) => notebookOps.delete(connId, toId(id)));
+ipcMain.handle('notebooks:reorder', (_, connId, id, position) => notebookOps.reorder(connId, toId(id), toPosition(position)));
 
 // IPC Handlers for Sections
-ipcMain.handle('sections:getAll', () => sectionOps.getAll());
-ipcMain.handle('sections:getByNotebook', (_, notebookId) => sectionOps.getByNotebook(toId(notebookId)));
-ipcMain.handle('sections:getById', (_, id) => sectionOps.getById(toId(id)));
-ipcMain.handle('sections:create', (_, notebookId, title, color) => sectionOps.create(toId(notebookId), title, color));
-ipcMain.handle('sections:update', (_, id, title, color) => sectionOps.update(toId(id), title, color));
-ipcMain.handle('sections:delete', (_, id) => sectionOps.delete(toId(id)));
-ipcMain.handle('sections:reorder', (_, id, position) => sectionOps.reorder(toId(id), toPosition(position)));
-ipcMain.handle('sections:move', (_, id, notebookId) => sectionOps.move(toId(id), toId(notebookId)));
+ipcMain.handle('sections:getAll', (_, connId) => sectionOps.getAll(connId));
+ipcMain.handle('sections:getByNotebook', (_, connId, notebookId) => sectionOps.getByNotebook(connId, toId(notebookId)));
+ipcMain.handle('sections:getById', (_, connId, id) => sectionOps.getById(connId, toId(id)));
+ipcMain.handle('sections:create', (_, connId, notebookId, title, color) => sectionOps.create(connId, toId(notebookId), title, color));
+ipcMain.handle('sections:update', (_, connId, id, title, color) => sectionOps.update(connId, toId(id), title, color));
+ipcMain.handle('sections:delete', (_, connId, id) => sectionOps.delete(connId, toId(id)));
+ipcMain.handle('sections:reorder', (_, connId, id, position) => sectionOps.reorder(connId, toId(id), toPosition(position)));
+ipcMain.handle('sections:move', (_, connId, id, notebookId) => sectionOps.move(connId, toId(id), toId(notebookId)));
 
 // IPC Handlers for Pages
-ipcMain.handle('pages:getAll', () => pageOps.getAll());
-ipcMain.handle('pages:getBySection', (_, sectionId) => pageOps.getBySection(toId(sectionId)));
-ipcMain.handle('pages:getById', (_, id) => pageOps.getById(toId(id)));
-ipcMain.handle('pages:getFavorites', () => pageOps.getFavorites());
-ipcMain.handle('pages:create', (_, sectionId, title) => pageOps.create(toId(sectionId), title));
-ipcMain.handle('pages:update', (_, id, title) => pageOps.update(toId(id), title));
-ipcMain.handle('pages:toggleFavorite', (_, id) => pageOps.toggleFavorite(toId(id)));
-ipcMain.handle('pages:delete', (_, id) => pageOps.delete(toId(id)));
-ipcMain.handle('pages:reorder', (_, id, position) => pageOps.reorder(toId(id), toPosition(position)));
-ipcMain.handle('pages:move', (_, id, sectionId) => pageOps.move(toId(id), toId(sectionId)));
+ipcMain.handle('pages:getAll', (_, connId) => pageOps.getAll(connId));
+ipcMain.handle('pages:getBySection', (_, connId, sectionId) => pageOps.getBySection(connId, toId(sectionId)));
+ipcMain.handle('pages:getById', (_, connId, id) => pageOps.getById(connId, toId(id)));
+ipcMain.handle('pages:getFavorites', (_, connId) => pageOps.getFavorites(connId));
+ipcMain.handle('pages:create', (_, connId, sectionId, title) => pageOps.create(connId, toId(sectionId), title));
+ipcMain.handle('pages:update', (_, connId, id, title) => pageOps.update(connId, toId(id), title));
+ipcMain.handle('pages:toggleFavorite', (_, connId, id) => pageOps.toggleFavorite(connId, toId(id)));
+ipcMain.handle('pages:delete', (_, connId, id) => pageOps.delete(connId, toId(id)));
+ipcMain.handle('pages:reorder', (_, connId, id, position) => pageOps.reorder(connId, toId(id), toPosition(position)));
+ipcMain.handle('pages:move', (_, connId, id, sectionId) => pageOps.move(connId, toId(id), toId(sectionId)));
 
 // IPC Handlers for Blocks
-ipcMain.handle('blocks:getByPage', (_, pageId) => blockOps.getByPage(toId(pageId)));
-ipcMain.handle('blocks:getById', (_, id) => blockOps.getById(toId(id)));
-ipcMain.handle('blocks:create', (_, pageId, type, content, language, filename) => blockOps.create(toId(pageId), type, content, language, filename));
-ipcMain.handle('blocks:update', (_, id, content, language, title) => blockOps.update(toId(id), content, language, title));
-ipcMain.handle('blocks:delete', (_, id) => blockOps.delete(toId(id)));
-ipcMain.handle('blocks:reorder', (_, id, position) => blockOps.reorder(toId(id), toPosition(position)));
+ipcMain.handle('blocks:getByPage', (_, connId, pageId) => blockOps.getByPage(connId, toId(pageId)));
+ipcMain.handle('blocks:getById', (_, connId, id) => blockOps.getById(connId, toId(id)));
+ipcMain.handle('blocks:create', (_, connId, pageId, type, content, language, filename) => blockOps.create(connId, toId(pageId), type, content, language, filename));
+ipcMain.handle('blocks:update', (_, connId, id, content, language, title) => blockOps.update(connId, toId(id), content, language, title));
+ipcMain.handle('blocks:delete', (_, connId, id) => blockOps.delete(connId, toId(id)));
+ipcMain.handle('blocks:reorder', (_, connId, id, position) => blockOps.reorder(connId, toId(id), toPosition(position)));
 
 // IPC Handlers for Tags
-ipcMain.handle('tags:getAll', () => tagOps.getAll());
-ipcMain.handle('tags:getByPage', (_, pageId) => tagOps.getByPage(toId(pageId)));
-ipcMain.handle('tags:create', (_, name, color) => tagOps.create(name, color));
-ipcMain.handle('tags:addToPage', (_, pageId, tagId) => tagOps.addToPage(toId(pageId), toId(tagId)));
+ipcMain.handle('tags:getAll', (_, connId) => tagOps.getAll(connId));
+ipcMain.handle('tags:getByPage', (_, connId, pageId) => tagOps.getByPage(connId, toId(pageId)));
+ipcMain.handle('tags:create', (_, connId, name, color) => tagOps.create(connId, name, color));
+ipcMain.handle('tags:addToPage', (_, connId, pageId, tagId) => tagOps.addToPage(connId, toId(pageId), toId(tagId)));
+ipcMain.handle('tags:removeFromPage', (_, connId, pageId, tagId) => tagOps.removeFromPage(connId, toId(pageId), toId(tagId)));
 
 // IPC Handlers for Search
-ipcMain.handle('search:query', (_, query) => searchOps.search(query));
+ipcMain.handle('search:query', (_, connId, query) => searchOps.search(connId, query));
 
 // IPC Handlers for Export
-ipcMain.handle('export:page', (_, pageId, format, blockLayout) => exportOps.exportPage(toId(pageId), format, blockLayout));
-ipcMain.handle('export:section', (_, sectionId, format, blockLayout) => exportOps.exportSection(toId(sectionId), format, blockLayout));
-ipcMain.handle('export:notebook', (_, notebookId, format, blockLayout) => exportOps.exportNotebook(toId(notebookId), format, blockLayout));
-ipcMain.handle('export:block', (_, blockId, format) => exportOps.exportBlock(toId(blockId), format));
+ipcMain.handle('export:page', (_, connId, pageId, format, blockLayout) => exportOps.exportPage(connId, toId(pageId), format, blockLayout));
+ipcMain.handle('export:section', (_, connId, sectionId, format, blockLayout) => exportOps.exportSection(connId, toId(sectionId), format, blockLayout));
+ipcMain.handle('export:notebook', (_, connId, notebookId, format, blockLayout) => exportOps.exportNotebook(connId, toId(notebookId), format, blockLayout));
+ipcMain.handle('export:block', (_, connId, blockId, format) => exportOps.exportBlock(connId, toId(blockId), format));
+
+// IPC Handlers for Connections
+ipcMain.handle('connections:list', () =>
+  listConnections().map(c => ({ ...c, status: manager.status(c.id) }))
+);
+
+ipcMain.handle('connections:add', async (_, cfg) => {
+  const saved = addConnection(cfg);
+  // getConnectionForOpen peut jeter de façon synchrone (ex. chiffrement
+  // indisponible) ; sans garde, ça rejetterait ce handler après coup, alors
+  // que la config est déjà persistée. Même garde que la boucle de démarrage.
+  try {
+    manager.open(getConnectionForOpen(saved.id)).catch(() => {});
+  } catch (err) {
+    console.error(`Connexion ${saved.id} illisible :`, err);
+  }
+  return saved;
+});
+
+ipcMain.handle('connections:update', async (_, id, cfg) => {
+  const saved = updateConnection(id, cfg);
+  try {
+    manager.open(getConnectionForOpen(id)).catch(() => {});
+  } catch (err) {
+    console.error(`Connexion ${id} illisible :`, err);
+  }
+  return saved;
+});
+
+ipcMain.handle('connections:remove', async (_, id) => {
+  await manager.close(id);
+  removeConnection(id);
+});
+
+ipcMain.handle('connections:test', async (_, cfg) => {
+  // Connexion éphémère : jamais enregistrée. Un mot de passe résolu depuis le
+  // stockage local ne doit JAMAIS être envoyé vers une cible choisie par le
+  // renderer (host/port/database/user viennent intégralement de `cfg`, non
+  // fiable) : sinon un renderer compromis pourrait énumérer un id réel via
+  // `connections:list` puis demander de le « tester » vers un serveur
+  // attaquant, et le process main s'y connecterait avec le vrai mot de
+  // passe. `resolveTestConfig` n'autorise la réutilisation du secret stocké
+  // que si l'endpoint testé correspond exactement à celui enregistré.
+  const resolved = resolveTestConfig(cfg, getConnectionForOpen);
+  if (!resolved.ok) return resolved;
+  const { config } = resolved;
+
+  const Adapter = ADAPTERS[config.type];
+  if (!Adapter) return { ok: false, error: `Type inconnu : ${config.type}` };
+
+  let adapter;
+  try {
+    adapter = new Adapter(config);
+    await adapter.open();
+    await adapter.close();
+    return { ok: true };
+  } catch (err) {
+    if (adapter) await adapter.close().catch(() => {});
+    return { ok: false, error: normalizeConnectionError(err) };
+  }
+});
+
+ipcMain.handle('connections:reconnect', async (_, id) => {
+  try {
+    await manager.open(getConnectionForOpen(id));
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: normalizeConnectionError(err) };
+  }
+});
 
 ipcMain.handle('dialog:prompt', async (event, message, defaultValue = '') => {
   const result = await prompt({
@@ -300,6 +318,33 @@ ipcMain.handle('dialog:prompt', async (event, message, defaultValue = '') => {
     mainWindow: mainWindow,
   });
   return result;
+});
+
+// Sélecteur natif exclusif pour le fichier SQLite d'une connexion : la saisie
+// libre est interdite (voir ConnectionsModal), donc ces deux dialogs sont la
+// seule façon de renseigner `file`. Jamais de throw sur annulation — le
+// renderer distingue l'annulation d'une erreur via `canceled`.
+ipcMain.handle('dialog:chooseSqliteFile', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Sélectionner une base de données SQLite',
+    filters: [{ name: 'Base de données SQLite', extensions: ['sqlite', 'db'] }],
+    properties: ['openFile'],
+  });
+  if (canceled || filePaths.length === 0) return { canceled: true };
+  return { canceled: false, filePath: filePaths[0] };
+});
+
+ipcMain.handle('dialog:createSqliteFile', async () => {
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Créer une nouvelle base de données SQLite',
+    defaultPath: 'netcodes.sqlite',
+    filters: [{ name: 'Base de données SQLite', extensions: ['sqlite'] }],
+  });
+  if (canceled || !filePath) return { canceled: true };
+  // Même règle que l'ancien flux 1.x (`handleChooseDatabase`) : si l'usager
+  // n'a pas tapé d'extension reconnue, on complète en `.sqlite`.
+  const hasKnownExt = /\.(sqlite|db)$/i.test(filePath);
+  return { canceled: false, filePath: hasKnownExt ? filePath : `${filePath}.sqlite` };
 });
 
 // IPC Handlers for Shell

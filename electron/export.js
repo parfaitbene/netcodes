@@ -6,7 +6,9 @@ import { marked } from 'marked';
 import { dialog } from 'electron';
 import fs from 'fs';
 import path from 'path';
-import { getDatabase } from './database.js';
+import { manager } from './db/connection-manager.js';
+
+const db = (connId) => manager.get(connId);
 
 // ─── Markdown → docx paragraphs ────────────────────────────────────────────
 
@@ -113,10 +115,9 @@ function blockToParagraphs(block) {
 
 // ─── Page → paragraphs ─────────────────────────────────────────────────────
 
-function pageToParagraphs(page, blocks, level = HeadingLevel.HEADING_1) {
-  const db = getDatabase();
+async function pageToParagraphs(connId, page, blocks, level = HeadingLevel.HEADING_1) {
   const pageBlocks = blocks ||
-    db.prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY position').all(page.id);
+    await db(connId).all('SELECT * FROM blocks WHERE page_id = ? ORDER BY position', [page.id]);
 
   const parts = [
     new Paragraph({
@@ -146,10 +147,9 @@ function blockToMarkdown(block) {
   return md;
 }
 
-function pageToMarkdown(page, blocks, level = 1) {
-  const db = getDatabase();
+async function pageToMarkdown(connId, page, blocks, level = 1) {
   const pageBlocks = blocks ||
-    db.prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY position').all(page.id);
+    await db(connId).all('SELECT * FROM blocks WHERE page_id = ? ORDER BY position', [page.id]);
 
   let md = `${'#'.repeat(level)} ${page.title}\n\n`;
   for (const block of pageBlocks) md += blockToMarkdown(block);
@@ -225,9 +225,8 @@ async function writeBlockFile(destDir, block, index, format) {
   return filePath;
 }
 
-async function exportPageIntoDir(destDir, page, format, blockLayout) {
-  const db = getDatabase();
-  const blocks = db.prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY position').all(page.id);
+async function exportPageIntoDir(connId, destDir, page, format, blockLayout) {
+  const blocks = await db(connId).all('SELECT * FROM blocks WHERE page_id = ? ORDER BY position', [page.id]);
 
   if (blockLayout === 'split') {
     const pageDir = uniquePath(destDir, sanitizeName(page.title));
@@ -241,34 +240,32 @@ async function exportPageIntoDir(destDir, page, format, blockLayout) {
   const base = sanitizeName(page.title);
   if (format === 'md') {
     const filePath = uniquePath(destDir, base, '.md');
-    fs.writeFileSync(filePath, pageToMarkdown(page, blocks, 1), 'utf-8');
+    fs.writeFileSync(filePath, await pageToMarkdown(connId, page, blocks, 1), 'utf-8');
     return filePath;
   }
   const filePath = uniquePath(destDir, base, '.docx');
-  const doc = makeDoc(pageToParagraphs(page, blocks, HeadingLevel.HEADING_1), base);
+  const doc = makeDoc(await pageToParagraphs(connId, page, blocks, HeadingLevel.HEADING_1), base);
   const buffer = await Packer.toBuffer(doc);
   fs.writeFileSync(filePath, buffer);
   return filePath;
 }
 
-async function exportSectionIntoDir(destDir, section, format, blockLayout) {
-  const db = getDatabase();
-  const pages = db.prepare('SELECT * FROM pages WHERE section_id = ? ORDER BY position').all(section.id);
+async function exportSectionIntoDir(connId, destDir, section, format, blockLayout) {
+  const pages = await db(connId).all('SELECT * FROM pages WHERE section_id = ? ORDER BY position', [section.id]);
   const sectionDir = uniquePath(destDir, sanitizeName(section.title));
   fs.mkdirSync(sectionDir, { recursive: true });
   for (const page of pages) {
-    await exportPageIntoDir(sectionDir, page, format, blockLayout);
+    await exportPageIntoDir(connId, sectionDir, page, format, blockLayout);
   }
   return sectionDir;
 }
 
-async function exportNotebookIntoDir(destDir, notebook, format, blockLayout) {
-  const db = getDatabase();
-  const sections = db.prepare('SELECT * FROM sections WHERE notebook_id = ? ORDER BY position').all(notebook.id);
+async function exportNotebookIntoDir(connId, destDir, notebook, format, blockLayout) {
+  const sections = await db(connId).all('SELECT * FROM sections WHERE notebook_id = ? ORDER BY position', [notebook.id]);
   const notebookDir = uniquePath(destDir, sanitizeName(notebook.name));
   fs.mkdirSync(notebookDir, { recursive: true });
   for (const section of sections) {
-    await exportSectionIntoDir(notebookDir, section, format, blockLayout);
+    await exportSectionIntoDir(connId, notebookDir, section, format, blockLayout);
   }
   return notebookDir;
 }
@@ -287,23 +284,22 @@ async function pickDestinationDir() {
 export const exportOps = {
   // blockLayout: 'merged' (one file per page, blocks merged inside) or
   // 'split' (one file per block, grouped in a folder per page).
-  exportPage: async (pageId, format = 'docx', blockLayout = 'merged') => {
+  exportPage: async (connId, pageId, format = 'docx', blockLayout = 'merged') => {
     try {
-      const db = getDatabase();
-      const page = db.prepare('SELECT * FROM pages WHERE id = ?').get(pageId);
+      const page = await db(connId).get('SELECT * FROM pages WHERE id = ?', [pageId]);
       if (!page) return { saved: false, error: 'Page not found' };
 
       if (blockLayout !== 'split') {
         if (format === 'md') {
-          return saveMarkdown(pageToMarkdown(page, null, 1), page.title);
+          return saveMarkdown(await pageToMarkdown(connId, page, null, 1), page.title);
         }
-        const doc = makeDoc(pageToParagraphs(page, null, HeadingLevel.HEADING_1), page.title);
+        const doc = makeDoc(await pageToParagraphs(connId, page, null, HeadingLevel.HEADING_1), page.title);
         return saveDoc(doc, page.title);
       }
 
       const destDir = await pickDestinationDir();
       if (!destDir) return { saved: false };
-      const filePath = await exportPageIntoDir(destDir, page, format, 'split');
+      const filePath = await exportPageIntoDir(connId, destDir, page, format, 'split');
       return { saved: true, filePath, isDir: false };
     } catch (e) {
       console.error('[exportPage] error:', e);
@@ -313,15 +309,14 @@ export const exportOps = {
 
   // Sections always contain multiple pages, so the export always reproduces
   // the Section > Page(> Bloc) folder structure on disk.
-  exportSection: async (sectionId, format = 'docx', blockLayout = 'merged') => {
+  exportSection: async (connId, sectionId, format = 'docx', blockLayout = 'merged') => {
     try {
-      const db = getDatabase();
-      const section = db.prepare('SELECT * FROM sections WHERE id = ?').get(sectionId);
+      const section = await db(connId).get('SELECT * FROM sections WHERE id = ?', [sectionId]);
       if (!section) return { saved: false, error: 'Section not found' };
 
       const destDir = await pickDestinationDir();
       if (!destDir) return { saved: false };
-      const filePath = await exportSectionIntoDir(destDir, section, format, blockLayout);
+      const filePath = await exportSectionIntoDir(connId, destDir, section, format, blockLayout);
       return { saved: true, filePath, isDir: true };
     } catch (e) {
       console.error('[exportSection] error:', e);
@@ -331,15 +326,14 @@ export const exportOps = {
 
   // Notebooks always reproduce the full Notebook > Section > Page(> Bloc)
   // folder structure on disk.
-  exportNotebook: async (notebookId, format = 'docx', blockLayout = 'merged') => {
+  exportNotebook: async (connId, notebookId, format = 'docx', blockLayout = 'merged') => {
     try {
-      const db = getDatabase();
-      const notebook = db.prepare('SELECT * FROM notebooks WHERE id = ?').get(notebookId);
+      const notebook = await db(connId).get('SELECT * FROM notebooks WHERE id = ?', [notebookId]);
       if (!notebook) return { saved: false, error: 'Notebook not found' };
 
       const destDir = await pickDestinationDir();
       if (!destDir) return { saved: false };
-      const filePath = await exportNotebookIntoDir(destDir, notebook, format, blockLayout);
+      const filePath = await exportNotebookIntoDir(connId, destDir, notebook, format, blockLayout);
       return { saved: true, filePath, isDir: true };
     } catch (e) {
       console.error('[exportNotebook] error:', e);
@@ -347,10 +341,9 @@ export const exportOps = {
     }
   },
 
-  exportBlock: async (blockId, format = 'docx') => {
+  exportBlock: async (connId, blockId, format = 'docx') => {
     try {
-      const db = getDatabase();
-      const block = db.prepare('SELECT * FROM blocks WHERE id = ?').get(blockId);
+      const block = await db(connId).get('SELECT * FROM blocks WHERE id = ?', [blockId]);
       if (!block) return { saved: false, error: 'Block not found' };
 
       const name = block.title || (block.type === 'code' ? 'code-block' : 'text-block');

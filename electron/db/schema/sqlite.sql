@@ -70,4 +70,3 @@ CREATE INDEX IF NOT EXISTS idx_pages_section ON pages(section_id);
 CREATE INDEX IF NOT EXISTS idx_blocks_page ON blocks(page_id);
 CREATE INDEX IF NOT EXISTS idx_page_tags_page ON page_tags(page_id);
 CREATE INDEX IF NOT EXISTS idx_page_tags_tag ON page_tags(tag_id);
-

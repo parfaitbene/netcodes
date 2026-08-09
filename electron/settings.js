@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { app } from 'electron';
+import crypto from 'crypto';
+import { app, safeStorage } from 'electron';
+import { endpointMatches } from './db/test-connection.js';
 
 function getSettingsPath() {
   return path.join(app.getPath('userData'), 'settings.json');
@@ -18,16 +20,131 @@ function writeSettings(data) {
   fs.writeFileSync(getSettingsPath(), JSON.stringify(data, null, 2), 'utf-8');
 }
 
-export function getDbPath() {
-  return readSettings().dbPath || null;
+// Seules les connexions serveur portent un mot de passe.
+function usesPassword(type) {
+  return type !== 'sqlite';
 }
 
-export function setDbPath(newPath) {
+function encryptPassword(password) {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error("Chiffrement indisponible sur ce système : impossible d'enregistrer un mot de passe.");
+  }
+  return safeStorage.encryptString(password).toString('base64');
+}
+
+function generateId(existingConnections) {
+  const taken = new Set(existingConnections.map(c => c.id));
+  let id;
+  do {
+    id = crypto.randomBytes(4).toString('hex');
+  } while (taken.has(id));
+  return id;
+}
+
+// Champs conservés tels quels dans settings.json (jamais `password` en clair).
+function toStored(cfg, passwordEnc) {
+  const stored = { id: cfg.id, name: cfg.name, type: cfg.type };
+  if (cfg.type === 'sqlite') {
+    stored.file = cfg.file;
+  } else {
+    stored.host = cfg.host;
+    stored.port = cfg.port;
+    stored.database = cfg.database;
+    stored.user = cfg.user;
+    if (passwordEnc) stored.passwordEnc = passwordEnc;
+  }
+  return stored;
+}
+
+// Vue publique : jamais passwordEnc.
+function toPublic(stored) {
+  const { passwordEnc, ...pub } = stored;
+  return pub;
+}
+
+export function listConnections() {
+  return (readSettings().connections ?? []).map(toPublic);
+}
+
+export function getConnectionForOpen(id) {
+  const stored = (readSettings().connections ?? []).find(c => c.id === id);
+  if (!stored) throw new Error(`Connexion inconnue : ${id}`);
+  const cfg = toPublic(stored);
+  if (stored.passwordEnc) {
+    cfg.password = safeStorage.decryptString(Buffer.from(stored.passwordEnc, 'base64'));
+  }
+  return cfg;
+}
+
+export function addConnection(cfg) {
   const s = readSettings();
-  s.dbPath = newPath;
+  const id = generateId(s.connections ?? []);
+  const passwordEnc = usesPassword(cfg.type) && cfg.password ? encryptPassword(cfg.password) : undefined;
+  const stored = toStored({ ...cfg, id }, passwordEnc);
+  s.connections = [...(s.connections ?? []), stored];
+  writeSettings(s);
+  return toPublic(stored);
+}
+
+export function updateConnection(id, cfg) {
+  const s = readSettings();
+  const existing = (s.connections ?? []).find(c => c.id === id);
+  if (!existing) throw new Error(`Connexion inconnue : ${id}`);
+
+  let passwordEnc;
+  if (usesPassword(cfg.type)) {
+    if (cfg.password) {
+      passwordEnc = encryptPassword(cfg.password);
+    } else if (existing.passwordEnc) {
+      // Pas de nouveau mot de passe fourni : on ne réutilise le secret déjà
+      // stocké que si la cible (host/port/database/user, ou file) envoyée
+      // par le renderer correspond EXACTEMENT à celle enregistrée — même
+      // règle que `connections:test` (voir `endpointMatches` dans
+      // `db/test-connection.js`). `existing` porte déjà ces champs en clair
+      // (seul le mot de passe est chiffré), donc aucune décryption n'est
+      // nécessaire pour cette comparaison. Sans cette garde, un renderer
+      // compromis pourrait repointer une connexion enregistrée vers un hôte
+      // arbitraire tout en conservant le mot de passe déjà stocké — pire que
+      // le test, puisque ça se persiste (finding 1 de la revue).
+      if (!endpointMatches(cfg, existing)) {
+        throw new Error('Saisissez le mot de passe pour enregistrer cette nouvelle cible.');
+      }
+      passwordEnc = existing.passwordEnc;
+    }
+  }
+
+  const stored = toStored({ ...cfg, id }, passwordEnc);
+  s.connections = s.connections.map(c => (c.id === id ? stored : c));
+  writeSettings(s);
+  return toPublic(stored);
+}
+
+export function removeConnection(id) {
+  const s = readSettings();
+  s.connections = (s.connections ?? []).filter(c => c.id !== id);
   writeSettings(s);
 }
 
-export function getDefaultDbPath() {
-  return path.join(app.getPath('userData'), 'netcodes.sqlite');
+// Au premier lancement 2.0.0 : convertit l'ancien réglage mono-base.
+export function migrateLegacyDbPath() {
+  const s = readSettings();
+  // `Array.isArray`, pas une simple vérité de tableau non vide : `connections:
+  // []` est un état légitime (l'utilisateur a retiré sa dernière connexion) et
+  // doit être distingué d'une clé absente (jamais migré). Une vérité de
+  // longueur traiterait les deux cas identiquement et recréerait la
+  // connexion « Base locale » à chaque relance après suppression — un
+  // fantôme qui ressuscite (finding 5 de la revue).
+  if (Array.isArray(s.connections)) {
+    if (s.dbPath) { delete s.dbPath; writeSettings(s); }
+    return;
+  }
+  const file = s.dbPath || path.join(app.getPath('userData'), 'netcodes.sqlite');
+  s.connections = [{
+    id: generateId([]),
+    name: 'Base locale',
+    type: 'sqlite',
+    file,
+  }];
+  delete s.dbPath;
+  writeSettings(s);
 }
